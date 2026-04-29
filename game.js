@@ -400,7 +400,6 @@ scene.add(player.group);player.group.rotation.y=Math.PI;
 const bullets=[],enemies=[],particles=[];
 const vfx = [];
 const scorePopups = [];
-const shockwaves = [];
 function spawnEnemy(){
   if(!player.alive)return;
   const e={group:makePlane(0x405986,0xcbd8ef),hp:2,
@@ -444,34 +443,39 @@ function flashScreen(amount = 0.4, color = 'white') {
 function flash(amt=.55){flashScreen(amt, 'white');}
 function hitImpact(pos, color = 0xffd27a) {
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeRadialTexture('rgba(255,245,180,1)', 'rgba(255,110,30,0)', 64),
-    transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false
+    map: makeRadialTexture('rgba(255,250,190,1)', 'rgba(255,90,20,0)', 96),
+    color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false
   }));
-  flash.position.copy(pos); flash.scale.set(2.2, 2.2, 1); scene.add(flash);
-  vfx.push({ mesh: flash, life: 0.09, max: 0.09, type: 'flash', grow: 3.5 });
-  burstParticles(pos, { color, count: 14, speed: 16, size: [0.035, 0.08], life: [0.18, 0.45], additive: true });
-  burstParticles(pos, { color: 0x2a2f36, count: 5, speed: 7, size: [0.05, 0.11], life: [0.25, 0.6], additive: false });
-  player.shake = Math.max(player.shake, 0.08);
+  const dist = pos.distanceTo(camera.position);
+  const scale = THREE.MathUtils.clamp(3 + dist * 0.035, 3, 5.8);
+  flash.position.copy(pos); flash.scale.set(scale, scale, 1); scene.add(flash);
+  vfx.push({ mesh: flash, life: 0.13, max: 0.13, type: 'flash', grow: 4.6 });
+  burstParticles(pos, { color: 0xffd36a, count: 20, speed: 22, size: [0.06, 0.14], life: [0.22, 0.55], additive: true });
+  burstParticles(pos, { color: 0xff6a24, count: 10, speed: 17, size: [0.05, 0.12], life: [0.2, 0.48], additive: true });
+  burstParticles(pos, { color: 0x343942, count: 6, speed: 8, size: [0.07, 0.15], life: [0.32, 0.7], additive: false });
+  slowmo(0.045, 0.78);
+  player.shake = Math.max(player.shake, 0.11);
 }
 function explosion(pos, big = false) {
-  const scale = big ? 1.6 : 1;
+  const scale = big ? 1.45 : 1;
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeRadialTexture('rgba(255,245,180,1)', 'rgba(255,90,20,0)', 128),
+    map: makeRadialTexture('rgba(255,248,190,1)', 'rgba(255,95,18,0)', 128),
     transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false
   }));
-  flash.position.copy(pos); flash.scale.set(5 * scale, 5 * scale, 1); scene.add(flash);
-  vfx.push({ mesh: flash, life: 0.16, max: 0.16, type: 'flash', grow: 6.5 * scale });
-  burstParticles(pos, { color: 0xffc15a, count: big ? 42 : 26, speed: big ? 24 : 17, size: [0.05, 0.16], life: [0.28, 0.85], additive: true });
-  burstParticles(pos, { color: 0xff4b2f, count: big ? 24 : 14, speed: big ? 18 : 13, size: [0.08, 0.22], life: [0.25, 0.75], additive: true });
-  for (let i = 0; i < (big ? 14 : 8); i++) {
-    const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.45 + Math.random() * 0.65, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0x2b333a, transparent: true, opacity: 0.34, depthWrite: false }));
-    smoke.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 1.8, (Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 1.8));
+  const flashScale = big ? 12.5 : 8;
+  flash.position.copy(pos); flash.scale.set(flashScale, flashScale, 1); scene.add(flash);
+  vfx.push({ mesh: flash, life: 0.2, max: 0.2, type: 'flash', grow: 7 * scale });
+  burstParticles(pos, { color: 0xffd36a, count: big ? 50 : 32, speed: big ? 28 : 20, size: [0.08, 0.2], life: [0.32, 0.9], additive: true });
+  burstParticles(pos, { color: 0xff5a2a, count: big ? 30 : 18, speed: big ? 21 : 15, size: [0.11, 0.27], life: [0.28, 0.78], additive: true });
+  for (let i = 0; i < (big ? 16 : 10); i++) {
+    const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.62 + Math.random() * 0.82, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0x3a3f46, transparent: true, opacity: 0.38, depthWrite: false }));
+    smoke.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 2.2, (Math.random() - 0.5) * 1.7, (Math.random() - 0.5) * 2.2));
     scene.add(smoke);
     particles.push({ mesh: smoke, vel: new THREE.Vector3((Math.random() - 0.5) * 2.5, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 2.5),
       life: 1.2 + Math.random() * 0.7, max: 1.9, drag: 0.985, grow: true });
   }
-  const l = new THREE.PointLight(0xff7c35, big ? 11 : 7, big ? 28 : 18);
+  const l = new THREE.PointLight(0xff8a35, big ? 14 : 9, big ? 32 : 22);
   l.position.copy(pos); scene.add(l);
   particles.push({ mesh: l, vel: new THREE.Vector3(), life: 0.22, max: 0.22, light: true });
   player.shake = Math.max(player.shake, big ? 0.65 : 0.42);
@@ -495,38 +499,53 @@ function setWeaponFromCombo(combo){
 }
 function currentTier(){return weaponTiers.find(t=>t.id===player.weapon)||weaponTiers.at(-1);}
 
-function createTracerMesh(color = 0xffdd88, length = 5.5, radius = 0.035) {
+function createTracerMesh({
+  color = 0xffd36a,
+  length = 10,
+  radius = 0.065,
+  glowMultiplier = 6,
+  glowOpacity = 0.42
+} = {}) {
   const group = new THREE.Group();
   const core = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius, length, 8),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false })
+    new THREE.CylinderGeometry(radius, radius, length, 10),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
   );
-  core.rotation.x = Math.PI / 2; group.add(core);
+  core.rotation.x = Math.PI / 2; core.position.z = -length * 0.5; group.add(core);
   const glow = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 3.8, radius * 1.8, length * 1.15, 8),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false })
+    new THREE.CylinderGeometry(radius * glowMultiplier, radius * glowMultiplier * 0.55, length * 1.08, 10, 1, true),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: glowOpacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
   );
-  glow.rotation.x = Math.PI / 2; group.add(glow);
+  glow.rotation.x = Math.PI / 2; glow.position.z = -length * 0.54; group.add(glow);
+  group.userData.coreOpacity = 1;
+  group.userData.glowOpacity = glowOpacity;
   return group;
 }
 function muzzleFlash(pos, color = 0xffd27a) {
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({
     map: makeRadialTexture('rgba(255,235,150,1)', 'rgba(255,120,30,0)', 64),
-    color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false
+    color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false
   }));
-  flash.position.copy(pos); flash.scale.set(1.2, 1.2, 1); scene.add(flash);
-  vfx.push({ mesh: flash, life: 0.08, max: 0.08, type: 'flash', grow: 2.5 });
+  flash.position.copy(pos); flash.scale.set(1.55, 1.55, 1); scene.add(flash);
+  vfx.push({ mesh: flash, life: 0.09, max: 0.09, type: 'flash', grow: 3.2 });
 }
 function shootOne(offX,angle=0,color=currentTier().color,explosive=false){
-  const m = createTracerMesh(color, player.weapon === 'overdrive' ? 8 : 5.5);
+  const tracerColor = explosive ? 0xff8a35 : 0xffd36a;
+  const m = createTracerMesh({
+    color: tracerColor,
+    length: player.weapon === 'overdrive' ? 12 : 10.5,
+    radius: player.weapon === 'overdrive' ? 0.075 : 0.065,
+    glowMultiplier: 6.3,
+    glowOpacity: 0.45
+  });
   m.position.copy(player.group.position).add(new THREE.Vector3(offX,.08,-1.7));
   scene.add(m);
   const dir=new THREE.Vector3(Math.sin(angle),0,-Math.cos(angle)).normalize();
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-  bullets.push({mesh:m,vel:dir.multiplyScalar(115),life:0.75,maxLife:0.75,hostile:false,explosive,color});
+  bullets.push({mesh:m,vel:dir.multiplyScalar(player.weapon === 'overdrive' ? 105 : 98),life:1,maxLife:1,hostile:false,explosive,color:tracerColor});
   muzzleFlash(player.group.position.clone().add(new THREE.Vector3(offX, 0.08, -1.7)), color);
   player.shake = Math.max(player.shake, 0.045);
-  player.cameraKick = Math.max(player.cameraKick || 0, 0.08);
+  player.cameraKick = Math.max(player.cameraKick || 0, 0.13);
 }
 function fireWeapon(){
   const tier=currentTier();
@@ -615,13 +634,16 @@ function showNearMiss(){
 }
 
 function enemyBullet(pos,dir){
-  const g=new THREE.Group();
-  const m=new THREE.Mesh(new THREE.SphereGeometry(.14,8,6),new THREE.MeshBasicMaterial({color:0xff4b2f,fog:false}));
-  g.add(m);
-  const glow=new THREE.Mesh(new THREE.SphereGeometry(.28,8,6),new THREE.MeshBasicMaterial({color:0xff2200,transparent:true,opacity:.35,fog:false}));
-  g.add(glow);
+  const g = createTracerMesh({
+    color: 0xff3b1f,
+    length: 8.5,
+    radius: 0.055,
+    glowMultiplier: 6,
+    glowOpacity: 0.42
+  });
   g.position.copy(pos);scene.add(g);
-  bullets.push({mesh:g,vel:dir.multiplyScalar(56),life:3,hostile:true,explosive:false,nearChecked:false});
+  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+  bullets.push({mesh:g,vel:dir.multiplyScalar(58),life:3,maxLife:3,hostile:true,explosive:false,nearChecked:false});
 }
 function damagePlayer(n){
   player.hp=Math.max(0,player.hp-n);
@@ -723,9 +745,10 @@ function updateBullets(dt){
     const b=bullets[i];b.mesh.position.addScaledVector(b.vel,dt);b.life-=dt;
     if (b.maxLife) {
       const k = Math.max(0, b.life / b.maxLife);
+      const fade = THREE.MathUtils.smoothstep(k, 0.02, 0.28);
       if (b.mesh.children) {
         b.mesh.children.forEach((child, idx) => {
-          if (child.material) child.material.opacity = idx === 0 ? 0.95 * k : 0.28 * k;
+          if (child.material) child.material.opacity = (idx === 0 ? (b.mesh.userData.coreOpacity || 1) : (b.mesh.userData.glowOpacity || 0.4)) * fade;
         });
       }
     }

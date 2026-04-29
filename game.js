@@ -371,6 +371,8 @@ function createBattlefieldEnvironment(){
 // Input
 const gameKeys=new Set(['Space','KeyW','KeyA','KeyS','KeyD','KeyR','ShiftLeft','ShiftRight']);
 const keys=new Set();
+const aimNdc=new THREE.Vector2(),aimRaycaster=new THREE.Raycaster(),aimDir=new THREE.Vector3(),aimWorldPoint=new THREE.Vector3();
+const aimAssistProbe=new THREE.Vector3(),aimAssistDir=new THREE.Vector3();
 window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();});
 window.addEventListener('keyup',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.delete(e.code);});
 const mouse={x:innerWidth/2,y:innerHeight/2,targetX:innerWidth/2,targetY:innerHeight/2,down:false};
@@ -379,14 +381,36 @@ function clampAimToPlayArea(x,y){
   mouse.targetX=THREE.MathUtils.clamp(x,cx-maxX,cx+maxX);
   mouse.targetY=THREE.MathUtils.clamp(y,cy-maxY,cy+maxY);
 }
-clampAimToPlayArea(innerWidth/2,innerHeight/2);
-window.addEventListener('pointermove',e=>clampAimToPlayArea(e.clientX,e.clientY));
-window.addEventListener('pointerdown',e=>{
-  if(e.button===0){e.preventDefault();clampAimToPlayArea(e.clientX,e.clientY);mouse.down=true;ensureAudio();}
+function syncAimNdcFromMouse(){
+  aimNdc.set((mouse.x/innerWidth)*2-1,-(mouse.y/innerHeight)*2+1);
+}
+function resetAimToCenter(){
+  const cx=innerWidth/2,cy=innerHeight/2;
+  clampAimToPlayArea(cx,cy);
+  mouse.x=mouse.targetX;mouse.y=mouse.targetY;
+  syncAimNdcFromMouse();
+}
+function moveAimByDelta(dx,dy){
+  clampAimToPlayArea(mouse.targetX+dx,mouse.targetY+dy);
+}
+resetAimToCenter();
+window.addEventListener('pointermove',e=>{
+  if(document.pointerLockElement===renderer.domElement)return;
+  if(e.target===renderer.domElement)clampAimToPlayArea(e.clientX,e.clientY);
+});
+window.addEventListener('mousemove',e=>{
+  if(document.pointerLockElement===renderer.domElement)moveAimByDelta(e.movementX||0,e.movementY||0);
+});
+renderer.domElement.addEventListener('pointerdown',e=>{
+  if(e.button!==0)return;
+  e.preventDefault();mouse.down=true;ensureAudio();
+  const lock=renderer.domElement.requestPointerLock?.();
+  lock?.catch?.(()=>{});
 });
 window.addEventListener('pointerup',e=>{if(e.button===0)mouse.down=false;});
 window.addEventListener('pointercancel',()=>{mouse.down=false;});
 window.addEventListener('blur',()=>{mouse.down=false;});
+document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==renderer.domElement)mouse.down=false;});
 window.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('resize',()=>clampAimToPlayArea(mouse.targetX,mouse.targetY));
 
@@ -466,8 +490,6 @@ const scorePopups = [];
 let ambientTracerTimer = 0;
 let nextGunSide = -1;
 const playerDamageFx={smokeTimer:0,sparkTimer:0,fireTimer:0};
-const aimNdc=new THREE.Vector2(),aimRaycaster=new THREE.Raycaster(),aimDir=new THREE.Vector3(),aimWorldPoint=new THREE.Vector3();
-const aimAssistProbe=new THREE.Vector3(),aimAssistDir=new THREE.Vector3();
 function spawnEnemy(){
   if(!player.alive)return;
   const e={group:makePlane(0x405986,0xcbd8ef),hp:2,
@@ -692,7 +714,7 @@ function updateAim(dt){
   const alpha=1-Math.exp(-dt*24);
   mouse.x=THREE.MathUtils.lerp(mouse.x,mouse.targetX,alpha);
   mouse.y=THREE.MathUtils.lerp(mouse.y,mouse.targetY,alpha);
-  aimNdc.set((mouse.x/innerWidth)*2-1,-(mouse.y/innerHeight)*2+1);
+  syncAimNdcFromMouse();
   aimRaycaster.setFromCamera(aimNdc,camera);
   aimDir.copy(aimRaycaster.ray.direction).normalize();
   aimWorldPoint.copy(aimRaycaster.ray.origin).addScaledVector(aimDir,140);
@@ -702,11 +724,11 @@ function updateAim(dt){
   }
 }
 function aimedDirectionFrom(start,angle=0){
-  aimNdc.set((mouse.x/innerWidth)*2-1,-(mouse.y/innerHeight)*2+1);
+  syncAimNdcFromMouse();
   aimRaycaster.setFromCamera(aimNdc,camera);
   aimWorldPoint.copy(aimRaycaster.ray.origin).addScaledVector(aimRaycaster.ray.direction,140);
   const dir=aimWorldPoint.clone().sub(start).normalize();
-  let best=null,bestD=.12;
+  let best=null,bestD=.16;
   for(const e of enemies){
     aimAssistProbe.copy(e.group.position).project(camera);
     if(aimAssistProbe.z<-1||aimAssistProbe.z>1)continue;
@@ -715,7 +737,7 @@ function aimedDirectionFrom(start,angle=0){
   }
   if(best){
     aimAssistDir.copy(best.group.position).sub(start).normalize();
-    dir.lerp(aimAssistDir,THREE.MathUtils.clamp((.12-bestD)/.12*.22,0,.22)).normalize();
+    dir.lerp(aimAssistDir,THREE.MathUtils.clamp((.16-bestD)/.16*.24,0,.24)).normalize();
   }
   if(angle){
     dir.applyAxisAngle(camera.up,angle).normalize();
@@ -964,6 +986,7 @@ function resetGame(){
   Object.assign(playerDamageFx,{smokeTimer:0,sparkTimer:0,fireTimer:0});
   Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,cameraKick:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0});
   updatePlayerDamageVisuals(0);
+  resetAimToCenter();
   player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);
   if(ui.lastStand)ui.lastStand.classList.remove('show');for(let i=0;i<5;i++)spawnEnemy();
 }
@@ -1065,6 +1088,19 @@ function updateAmbientCombat(dt) {
     ambientTracerTimer = 0.26 + Math.random() * 0.26;
   }
 }
+function distancePointToSegment(point,a,b){
+  const ab=b.clone().sub(a);
+  const lenSq=ab.lengthSq();
+  if(lenSq<=0.000001)return {distance:point.distanceTo(a),closest:a.clone()};
+  const t=THREE.MathUtils.clamp(point.clone().sub(a).dot(ab)/lenSq,0,1);
+  const closest=a.clone().addScaledVector(ab,t);
+  return {distance:point.distanceTo(closest),closest};
+}
+function enemyHitRadius(enemy){
+  const scale=Math.max(enemy.group.scale.x,enemy.group.scale.y,enemy.group.scale.z,1);
+  const dist=enemy.group.position.distanceTo(camera.position);
+  return THREE.MathUtils.clamp(1.9*scale+dist*.004,1.9,2.4);
+}
 function updateBullets(dt){
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];
@@ -1093,9 +1129,10 @@ function updateBullets(dt){
       if(repair.active&&!b.nearChecked&&d>1.0&&d<2.15&&Math.abs(b.pos.z-player.group.position.z)<1.2){b.nearChecked=true;showNearMiss();}
     }else{
       for(let j=enemies.length-1;j>=0;j--){const e=enemies[j];
-        if(b.pos.distanceTo(e.group.position)<1.35){
+        const hit=distancePointToSegment(e.group.position,b.prevPos,b.pos);
+        if(hit.distance<enemyHitRadius(e)){
           e.hp-=b.explosive?3:1;
-          hitImpact(b.pos, b.color || 0xffd27a);
+          hitImpact(hit.closest, b.color || 0xffd27a);
           pulseReticleHit();
           if(b.explosive)explosion(e.group.position.clone(), true);
           scene.remove(b.mesh);bullets.splice(i,1);

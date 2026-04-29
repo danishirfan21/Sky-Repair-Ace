@@ -493,6 +493,7 @@ const vfx = [];
 const scorePopups = [];
 let ambientTracerTimer = 0;
 let nextGunSide = -1;
+const bulletInterceptConfig={enabled:true,radius:.9,score:10};
 const playerDamageFx={smokeTimer:0,sparkTimer:0,fireTimer:0};
 function spawnEnemy(){
   if(!player.alive)return;
@@ -1141,6 +1142,45 @@ function distancePointToSegment(point,a,b){
   const closest=a.clone().addScaledVector(ab,t);
   return {distance:point.distanceTo(closest),closest};
 }
+function distanceSegmentToSegment(a0,a1,b0,b1){
+  const u=a1.clone().sub(a0),v=b1.clone().sub(b0),w=a0.clone().sub(b0);
+  const a=u.dot(u),b=u.dot(v),c=v.dot(v),d=u.dot(w),e=v.dot(w);
+  const denom=a*c-b*b;
+  let s=0,t=0;
+  if(a<=0.000001&&c<=0.000001){
+    const midpoint=a0.clone().add(b0).multiplyScalar(.5);
+    return {distance:a0.distanceTo(b0),closestA:a0.clone(),closestB:b0.clone(),midpoint};
+  }
+  if(a<=0.000001)t=THREE.MathUtils.clamp(e/c,0,1);
+  else if(c<=0.000001)s=THREE.MathUtils.clamp(-d/a,0,1);
+  else{
+    s=THREE.MathUtils.clamp((b*e-c*d)/denom,0,1);
+    t=THREE.MathUtils.clamp((a*e-b*d)/denom,0,1);
+    const s2=THREE.MathUtils.clamp((b*t-d)/a,0,1);
+    if(Math.abs(s2-s)>.0001){s=s2;t=THREE.MathUtils.clamp((b*s+e)/c,0,1);}
+  }
+  const closestA=a0.clone().addScaledVector(u,s),closestB=b0.clone().addScaledVector(v,t);
+  return {distance:closestA.distanceTo(closestB),closestA,closestB,midpoint:closestA.clone().add(closestB).multiplyScalar(.5)};
+}
+function interceptBullets(){
+  if(!bulletInterceptConfig.enabled)return;
+  for(const playerBullet of bullets){
+    if(playerBullet.hostile||playerBullet.consumed||!playerBullet.prevPos||!playerBullet.pos)continue;
+    for(const hostileBullet of bullets){
+      if(!hostileBullet.hostile||hostileBullet.consumed||!hostileBullet.prevPos||!hostileBullet.pos)continue;
+      const hit=distanceSegmentToSegment(playerBullet.prevPos,playerBullet.pos,hostileBullet.prevPos,hostileBullet.pos);
+      if(hit.distance>bulletInterceptConfig.radius)continue;
+      playerBullet.consumed=true;hostileBullet.consumed=true;
+      burstParticles(hit.midpoint,{color:0xfff4c8,count:10,speed:11,size:[0.035,0.09],life:[0.14,0.32],additive:true});
+      burstParticles(hit.midpoint,{color:0x9ffcff,count:5,speed:8,size:[0.025,0.06],life:[0.12,0.25],additive:true});
+      floatingText(`INTERCEPT +${bulletInterceptConfig.score}`,hit.midpoint,'#fff1b8');
+      player.score+=bulletInterceptConfig.score;
+      player.shake=Math.max(player.shake,.08);
+      whoosh();beep(980,.045,.025,'triangle');
+      break;
+    }
+  }
+}
 function enemyHitRadius(enemy){
   const scale=Math.max(enemy.group.scale.x,enemy.group.scale.y,enemy.group.scale.z,1);
   const dist=enemy.group.position.distanceTo(camera.position);
@@ -1167,7 +1207,11 @@ function updateBullets(dt){
         });
       }
     }
-    if(b.life<=0){scene.remove(b.mesh);bullets.splice(i,1);continue;}
+  }
+  interceptBullets();
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    if(b.consumed||b.life<=0){scene.remove(b.mesh);bullets.splice(i,1);continue;}
     if(b.hostile){
       const d=b.pos.distanceTo(player.group.position);
       if(d<.9){damagePlayer(7);scene.remove(b.mesh);bullets.splice(i,1);continue;}
@@ -1180,7 +1224,7 @@ function updateBullets(dt){
           hitImpact(hit.closest, b.color || 0xffd27a);
           pulseReticleHit();
           if(b.explosive)explosion(e.group.position.clone(), true);
-          scene.remove(b.mesh);bullets.splice(i,1);
+          b.consumed=true;
           if(e.hp<=0){
             pulseReticleKill();
             explosion(e.group.position, true);scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;

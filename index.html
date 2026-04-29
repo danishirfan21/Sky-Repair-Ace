@@ -37,7 +37,7 @@
 <body>
 <div id="flash"></div><div id="vignette"></div>
 <div id="hud">
-  <div id="top" class="panel"><div class="big">Sky Repair Ace</div><div class="muted">Hull <span id="hp">100</span>% · Score <span id="score">0</span> · Time <span id="time">0.0</span>s</div><div class="muted">Kills <span id="kills">0</span> · Near Miss <span id="nearCount">0</span> · Max Combo x<span id="maxCombo">0</span></div></div>
+  <div id="top" class="panel"><div class="big">Sky Repair Ace</div><div class="muted">Hull <span id="hp">100</span>% · Score <span id="score">0</span> · Time <span id="time">0.0</span>s</div><div class="muted">Kills <span id="kills">0</span> · Near Miss <span id="nearCount">0</span> · Max Combo x<span id="maxCombo">0</span> · Radar <span id="enemyCount">0</span></div></div>
   <div id="weapon" class="panel"><div class="muted">ACTIVE WEAPON</div><div class="big" id="weaponName">Single Shot</div><div class="pill" id="weaponRule">Combo x0</div></div>
   <div id="warn">CRITICAL</div>
   <div id="nearMiss">NEAR MISS +25</div>
@@ -134,7 +134,8 @@ function tierForCombo(c){return weaponTiers.find(t=>c>=t.combo) || weaponTiers.a
 function setWeaponFromCombo(combo){
   const tier=tierForCombo(combo); if(tier.id!==player.weapon){ flash(.35); beep(900+combo*25,.13,.06,'triangle'); }
   player.weapon=tier.id; player.weaponTimer=tier.duration;
-  ui.weaponName.textContent=tier.name; ui.weaponRule.textContent=tier.rule;
+  if(ui.weaponName) ui.weaponName.textContent=tier.name;
+  if(ui.weaponRule) ui.weaponRule.textContent=tier.rule;
 }
 function currentTier(){return weaponTiers.find(t=>t.id===player.weapon)||weaponTiers.at(-1);}
 function shootOne(offsetX,angle=0,color=currentTier().color,explosive=false){
@@ -154,29 +155,29 @@ function fireWeapon(){
 
 const ui={hp:document.getElementById('hp'),score:document.getElementById('score'),time:document.getElementById('time'),kills:document.getElementById('kills'),nearCount:document.getElementById('nearCount'),maxCombo:document.getElementById('maxCombo'),enemyCount:document.getElementById('enemyCount'),warn:document.getElementById('warn'),nearMiss:document.getElementById('nearMiss'),box:document.getElementById('repairBox'),key:document.getElementById('key'),combo:document.getElementById('combo'),status:document.getElementById('status'),fill:document.getElementById('fill'),marker:document.getElementById('marker'),flash:document.getElementById('flash'),vignette:document.getElementById('vignette'),weaponName:document.getElementById('weaponName'),weaponRule:document.getElementById('weaponRule'),lastStand:document.getElementById('lastStand'),finalTime:document.getElementById('finalTime'),finalKills:document.getElementById('finalKills'),finalCombo:document.getElementById('finalCombo'),finalNear:document.getElementById('finalNear'),resultLine:document.getElementById('resultLine'),restart:document.getElementById('restart')};
 const repair={active:false,target:'KeyA',phaseT:0,speed:.8}; const repairKeys=['KeyA','KeyS','KeyD','KeyW'];
-function nextRepairPrompt(){repair.target=repairKeys[Math.floor(Math.random()*repairKeys.length)]; ui.key.textContent=repair.target.replace('Key',''); repair.phaseT=0; repair.speed=.75+Math.min(1.65,player.combo*.08);}
-function startRepair(){repair.active=true; player.combo=0; ui.box.classList.add('active'); ui.status.textContent=''; ui.combo.textContent='COMBO x0'; ui.fill.style.width='0%'; nextRepairPrompt();}
-function endRepair(){repair.active=false; ui.box.classList.remove('active');}
+function nextRepairPrompt(){repair.target=repairKeys[Math.floor(Math.random()*repairKeys.length)]; if(ui.key) ui.key.textContent=repair.target.replace('Key',''); repair.phaseT=0; repair.speed=.75+Math.min(1.65,player.combo*.08);}
+function startRepair(){repair.active=true; player.combo=0; if(ui.box) ui.box.classList.add('active'); if(ui.status) ui.status.textContent=''; if(ui.combo) ui.combo.textContent='COMBO x0'; if(ui.fill) ui.fill.style.width='0%'; nextRepairPrompt();}
+function endRepair(){repair.active=false; if(ui.box) ui.box.classList.remove('active');}
 let timeScale=1,slowTimer=0;
-function flash(amount=.55){ ui.flash.style.opacity=amount; setTimeout(()=>ui.flash.style.opacity=0,90); }
+function flash(amount=.55){ if(ui.flash) ui.flash.style.opacity=amount; setTimeout(()=>{if(ui.flash)ui.flash.style.opacity=0},90); }
 function slowmo(duration=.25,scale=.34){timeScale=scale; slowTimer=duration;}
 function repairSuccess(perfect){
   player.combo++; player.maxCombo=Math.max(player.maxCombo,player.combo); const heal=perfect ? 10+player.combo*2.5 : 5+player.combo*1.6; player.hp=Math.min(100,player.hp+heal);
-  ui.combo.textContent='COMBO x'+player.combo; ui.fill.style.width=Math.min(100,player.combo*7)+'%'; ui.status.textContent=perfect?'PERFECT WEAPON CHARGE!':'GOOD';
+  if(ui.combo) ui.combo.textContent='COMBO x'+player.combo; if(ui.fill) ui.fill.style.width=Math.min(100,player.combo*7)+'%'; if(ui.status) ui.status.textContent=perfect?'PERFECT WEAPON CHARGE!':'GOOD';
   particle(player.group.position.clone().add(new THREE.Vector3(0,0,.4)), perfect?0x66f7ff:0xffd27a, perfect?12:6);
   beep(perfect?920:520,.09,.045,perfect?'triangle':'sine'); if(perfect){slowmo(.25,.34);flash(.55);} setWeaponFromCombo(player.combo); nextRepairPrompt();
 }
-function repairFail(){player.combo=0; player.hp-=12; ui.combo.textContent='COMBO x0'; ui.fill.style.width='0%'; ui.status.textContent='MISS - SYSTEM SPARK'; player.shake=.35; beep(115,.16,.06,'sawtooth'); particle(player.group.position,0xff4b2f,10); setWeaponFromCombo(0); nextRepairPrompt();}
+function repairFail(){player.combo=0; player.hp-=12; if(ui.combo) ui.combo.textContent='COMBO x0'; if(ui.fill) ui.fill.style.width='0%'; if(ui.status) ui.status.textContent='MISS - SYSTEM SPARK'; player.shake=.35; beep(115,.16,.06,'sawtooth'); particle(player.group.position,0xff4b2f,10); setWeaponFromCombo(0); nextRepairPrompt();}
 function updateRepair(dt){
-  repair.phaseT += dt*repair.speed; const phase=(Math.sin(repair.phaseT*Math.PI*2)*.5+.5); ui.marker.style.left=(phase*300)+'px';
+  repair.phaseT += dt*repair.speed; const phase=(Math.sin(repair.phaseT*Math.PI*2)*.5+.5); if(ui.marker) ui.marker.style.left=(phase*300)+'px';
   const perfect=phase>.46&&phase<.54, good=phase>.31&&phase<.69;
   if(keys.has(repair.target)){ if(perfect) repairSuccess(true); else if(good) repairSuccess(false); else repairFail(); }
-  if(player.hp>=100 && player.combo>=3) { ui.status.textContent='SYSTEM RESTORED'; endRepair(); }
+  if(player.hp>=100 && player.combo>=3) { if(ui.status) ui.status.textContent='SYSTEM RESTORED'; endRepair(); }
 }
 function showNearMiss(){
   player.nearMisses++; player.score+=25; player.combo=Math.max(player.combo,0)+1; player.maxCombo=Math.max(player.maxCombo,player.combo);
-  ui.nearMiss.classList.add('show'); ui.nearMiss.textContent='NEAR MISS +25'; setTimeout(()=>ui.nearMiss.classList.remove('show'),260);
-  ui.status.textContent='NEAR MISS CHARGE!'; ui.combo.textContent='COMBO x'+player.combo; ui.fill.style.width=Math.min(100,player.combo*7)+'%';
+  if(ui.nearMiss){ ui.nearMiss.classList.add('show'); ui.nearMiss.textContent='NEAR MISS +25'; setTimeout(()=>ui.nearMiss.classList.remove('show'),260); }
+  if(ui.status) ui.status.textContent='NEAR MISS CHARGE!'; if(ui.combo) ui.combo.textContent='COMBO x'+player.combo; if(ui.fill) ui.fill.style.width=Math.min(100,player.combo*7)+'%';
   particle(player.group.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.6,.1,-.4)),0x9ffcff,8); whoosh(); slowmo(.14,.55); player.shake=.12; setWeaponFromCombo(player.combo);
 }
 
@@ -184,15 +185,15 @@ function enemyBullet(pos,dir){const m=new THREE.Mesh(new THREE.SphereGeometry(.1
 function damagePlayer(n){player.hp=Math.max(0,player.hp-n);player.shake=.35;particle(player.group.position,0xff5733,9);beep(95,.11,.06,'sawtooth'); if(player.hp<=0) endGame();}
 function endGame(){
   if(!player.alive) return; player.alive=false; endRepair();
-  ui.finalTime.textContent=player.survival.toFixed(1)+'s'; ui.finalKills.textContent=player.kills; ui.finalCombo.textContent='x'+player.maxCombo; ui.finalNear.textContent=player.nearMisses;
+  if(ui.finalTime) ui.finalTime.textContent=player.survival.toFixed(1)+'s'; if(ui.finalKills) ui.finalKills.textContent=player.kills; if(ui.finalCombo) ui.finalCombo.textContent='x'+player.maxCombo; if(ui.finalNear) ui.finalNear.textContent=player.nearMisses;
   const rank = player.survival>70||player.maxCombo>=15?'Legendary clutch pilot':player.survival>40||player.maxCombo>=8?'Elite panic mechanic':'Rookie ace under fire';
-  ui.resultLine.textContent=`${rank} · Score ${player.score}`; ui.lastStand.classList.add('show'); flash(.7); boom();
+  if(ui.resultLine) ui.resultLine.textContent=`${rank} · Score ${player.score}`; if(ui.lastStand) ui.lastStand.classList.add('show'); flash(.7); boom();
 }
 function resetGame(){
   bullets.splice(0).forEach(b=>scene.remove(b.mesh)); enemies.splice(0).forEach(e=>scene.remove(e.group)); particles.splice(0).forEach(p=>scene.remove(p.mesh));
-  Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0}); player.group.position.set(0,0,0); player.vel.set(0,0,0); setWeaponFromCombo(0); ui.lastStand.classList.remove('show'); for(let i=0;i<5;i++) spawnEnemy();
+  Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0}); player.group.position.set(0,0,0); player.vel.set(0,0,0); setWeaponFromCombo(0); if(ui.lastStand) ui.lastStand.classList.remove('show'); for(let i=0;i<5;i++) spawnEnemy();
 }
-ui.restart.addEventListener('click',resetGame);
+if(ui.restart) ui.restart.addEventListener('click',resetGame);
 
 function updatePlayer(dt){
   if(!player.alive) return;
@@ -203,7 +204,7 @@ function updatePlayer(dt){
   player.group.userData.prop.rotation.z += (repair.active?18:42)*dt;
   if(keys.has('KeyR')&&!repair.active&&player.hp<100) startRepair(); if(repair.active) updateRepair(dt);
   player.fireCd-=dt; const tier=currentTier(); if(keys.has('Space')&&!repair.active&&player.fireCd<=0){fireWeapon(); player.fireCd=tier.cd;}
-  if(player.weaponTimer>0){player.weaponTimer-=dt;if(player.weaponTimer<=0){player.weapon='single';ui.weaponName.textContent='Single Shot';ui.weaponRule.textContent='Combo expired';}}
+  if(player.weaponTimer>0){player.weaponTimer-=dt;if(player.weaponTimer<=0){player.weapon='single';if(ui.weaponName) ui.weaponName.textContent='Single Shot';if(ui.weaponRule) ui.weaponRule.textContent='Combo expired';}}
   player.survival=(performance.now()-player.startTime)/1000;
   skyMat.uniforms.shift.value = Math.min(.9, player.survival/90);
 }
@@ -226,7 +227,17 @@ function updateBullets(dt){
 }
 function updateParticles(dt){for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;if(p.life<=0){scene.remove(p.mesh);particles.splice(i,1);continue;} if(p.light){p.mesh.intensity=7*(p.life/p.max);} else {p.mesh.position.addScaledVector(p.vel,dt);p.mesh.material.opacity=Math.max(0,p.life/p.max);}}}
 function updateCamera(dt){const base=player.group.position.clone().add(new THREE.Vector3(0,3.7,11)); const s=player.shake>0?new THREE.Vector3((Math.random()-.5)*player.shake,(Math.random()-.5)*player.shake,0):new THREE.Vector3(); camera.position.lerp(base.add(s),dt*4.5); camera.lookAt(player.group.position.clone().add(new THREE.Vector3(0,.8,-15))); player.shake=Math.max(0,player.shake-dt*1.8);}
-function updateUI(){ui.hp.textContent=Math.round(player.hp); ui.score.textContent=player.score; ui.time.textContent=player.survival.toFixed(1); ui.kills.textContent=player.kills; ui.nearCount.textContent=player.nearMisses; ui.maxCombo.textContent=player.maxCombo; ui.enemyCount.textContent=enemies.length; ui.warn.style.opacity=player.hp<30&&player.alive?1:0; ui.vignette.style.opacity=player.hp<32&&player.alive?.9:0;}
+function updateUI(){
+  if(ui.hp) ui.hp.textContent=Math.round(player.hp);
+  if(ui.score) ui.score.textContent=player.score;
+  if(ui.time) ui.time.textContent=player.survival.toFixed(1);
+  if(ui.kills) ui.kills.textContent=player.kills;
+  if(ui.nearCount) ui.nearCount.textContent=player.nearMisses;
+  if(ui.maxCombo) ui.maxCombo.textContent=player.maxCombo;
+  if(ui.enemyCount) ui.enemyCount.textContent=enemies.length;
+  if(ui.warn) ui.warn.style.opacity=player.hp<30&&player.alive?1:0;
+  if(ui.vignette) ui.vignette.style.opacity=player.hp<32&&player.alive?.9:0;
+}
 let last=performance.now();
 function animate(now=performance.now()){requestAnimationFrame(animate); let dt=Math.min((now-last)/1000,.033); last=now; if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;} dt*=timeScale; updatePlayer(dt); updateEnemies(dt); updateBullets(dt); updateParticles(dt); updateCamera(dt); updateUI(); renderer.render(scene,camera);} animate();
 </script>

@@ -1163,7 +1163,7 @@ function distanceSegmentToSegment(a0,a1,b0,b1){
   return {distance:closestA.distanceTo(closestB),closestA,closestB,midpoint:closestA.clone().add(closestB).multiplyScalar(.5)};
 }
 function interceptBullets(){
-  if(!bulletInterceptConfig.enabled)return;
+  if(!player.alive||!bulletInterceptConfig.enabled)return;
   for(const playerBullet of bullets){
     if(playerBullet.hostile||playerBullet.consumed||!playerBullet.prevPos||!playerBullet.pos)continue;
     for(const hostileBullet of bullets){
@@ -1187,6 +1187,7 @@ function enemyHitRadius(enemy){
   return THREE.MathUtils.clamp(1.9*scale+dist*.004,1.9,2.4);
 }
 function updateBullets(dt){
+  if(!player.alive)return;
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];
     if(!b.pos)b.pos=b.mesh.position.clone();
@@ -1214,7 +1215,7 @@ function updateBullets(dt){
     if(b.consumed||b.life<=0){scene.remove(b.mesh);bullets.splice(i,1);continue;}
     if(b.hostile){
       const d=b.pos.distanceTo(player.group.position);
-      if(d<.9){damagePlayer(7);scene.remove(b.mesh);bullets.splice(i,1);continue;}
+      if(d<.9){damagePlayer(7);scene.remove(b.mesh);bullets.splice(i,1);if(!player.alive)break;continue;}
       if(repair.active&&!b.nearChecked&&d>1.0&&d<2.15&&Math.abs(b.pos.z-player.group.position.z)<1.2){b.nearChecked=true;showNearMiss();}
     }else{
       for(let j=enemies.length-1;j>=0;j--){const e=enemies[j];

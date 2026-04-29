@@ -373,6 +373,20 @@ const gameKeys=new Set(['Space','KeyW','KeyA','KeyS','KeyD','KeyR','ShiftLeft','
 const keys=new Set();
 window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();});
 window.addEventListener('keyup',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.delete(e.code);});
+const mouse={x:innerWidth/2,y:innerHeight/2,targetX:innerWidth/2,targetY:innerHeight/2,down:false};
+function clampAimToPlayArea(x,y){
+  const cx=innerWidth/2,cy=innerHeight/2,maxX=Math.min(innerWidth*.32,420),maxY=Math.min(innerHeight*.28,260);
+  mouse.targetX=THREE.MathUtils.clamp(x,cx-maxX,cx+maxX);
+  mouse.targetY=THREE.MathUtils.clamp(y,cy-maxY,cy+maxY);
+}
+window.addEventListener('pointermove',e=>clampAimToPlayArea(e.clientX,e.clientY));
+window.addEventListener('pointerdown',e=>{
+  if(e.button===0){e.preventDefault();clampAimToPlayArea(e.clientX,e.clientY);mouse.down=true;ensureAudio();}
+});
+window.addEventListener('pointerup',e=>{if(e.button===0)mouse.down=false;});
+window.addEventListener('blur',()=>{mouse.down=false;});
+window.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('resize',()=>clampAimToPlayArea(mouse.targetX,mouse.targetY));
 
 // Materials & builders
 function material(c){return new THREE.MeshStandardMaterial({color:c,roughness:.42,metalness:.04});}
@@ -450,6 +464,8 @@ const scorePopups = [];
 let ambientTracerTimer = 0;
 let nextGunSide = -1;
 const playerDamageFx={smokeTimer:0,sparkTimer:0,fireTimer:0};
+const aimNdc=new THREE.Vector2(),aimRaycaster=new THREE.Raycaster(),aimDir=new THREE.Vector3(),aimWorldPoint=new THREE.Vector3();
+const aimAssistProbe=new THREE.Vector3(),aimAssistDir=new THREE.Vector3();
 function spawnEnemy(){
   if(!player.alive)return;
   const e={group:makePlane(0x405986,0xcbd8ef),hp:2,
@@ -670,6 +686,39 @@ function setWeaponFromCombo(combo){
 }
 function currentTier(){return weaponTiers.find(t=>t.id===player.weapon)||weaponTiers.at(-1);}
 
+function updateAim(dt){
+  const alpha=1-Math.exp(-dt*14);
+  mouse.x=THREE.MathUtils.lerp(mouse.x,mouse.targetX,alpha);
+  mouse.y=THREE.MathUtils.lerp(mouse.y,mouse.targetY,alpha);
+  aimNdc.set((mouse.x/innerWidth)*2-1,-(mouse.y/innerHeight)*2+1);
+  aimRaycaster.setFromCamera(aimNdc,camera);
+  aimDir.copy(aimRaycaster.ray.direction).normalize();
+  aimWorldPoint.copy(aimRaycaster.ray.origin).addScaledVector(aimDir,140);
+  if(ui.reticle){
+    ui.reticle.style.left=mouse.x+'px';
+    ui.reticle.style.top=mouse.y+'px';
+  }
+}
+function aimedDirectionFrom(start,angle=0){
+  aimRaycaster.setFromCamera(aimNdc,camera);
+  aimWorldPoint.copy(aimRaycaster.ray.origin).addScaledVector(aimRaycaster.ray.direction,140);
+  const dir=aimWorldPoint.clone().sub(start).normalize();
+  let best=null,bestD=.12;
+  for(const e of enemies){
+    aimAssistProbe.copy(e.group.position).project(camera);
+    if(aimAssistProbe.z<-1||aimAssistProbe.z>1)continue;
+    const d=Math.hypot(aimAssistProbe.x-aimNdc.x,aimAssistProbe.y-aimNdc.y);
+    if(d<bestD){bestD=d;best=e;}
+  }
+  if(best){
+    aimAssistDir.copy(best.group.position).sub(start).normalize();
+    dir.lerp(aimAssistDir,THREE.MathUtils.clamp((.12-bestD)/.12*.22,0,.22)).normalize();
+  }
+  if(angle){
+    dir.applyAxisAngle(camera.up,angle).normalize();
+  }
+  return dir;
+}
 function alignTracerMesh(mesh, start, end, minLength = 0) {
   const dir = end.clone().sub(start);
   if (dir.lengthSq() < 0.0001) return;
@@ -729,8 +778,8 @@ function shootOne(offX,angle=0,color=currentTier().color,explosive=false){
     glowMultiplier: 6.3,
     glowOpacity: overdrive ? 0.4 : 0.34
   });
-  const dir=new THREE.Vector3(Math.sin(angle),0,-Math.cos(angle)).normalize();
   const start = player.group.position.clone().add(new THREE.Vector3(offX,.12,-2.75));
+  const dir=aimedDirectionFrom(start,angle);
   const tracerLength = overdrive ? 10.5 : 7;
   alignTracerMesh(m, start.clone().addScaledVector(dir, -tracerLength), start, tracerLength);
   scene.add(m);
@@ -786,17 +835,17 @@ const reticleProbe=new THREE.Vector3();
 function updateReticleState(){
   if(!ui.reticle)return;
   const dim=repair.active||!player.alive;
-  let nearCenter=false;
+  let nearTarget=false;
   if(!dim){
     for(const e of enemies){
       reticleProbe.copy(e.group.position).project(camera);
-      if(reticleProbe.z>-1&&reticleProbe.z<1&&Math.abs(reticleProbe.x)<.08&&Math.abs(reticleProbe.y)<.08){
-        nearCenter=true;break;
+      if(reticleProbe.z>-1&&reticleProbe.z<1&&Math.hypot(reticleProbe.x-aimNdc.x,reticleProbe.y-aimNdc.y)<.12){
+        nearTarget=true;break;
       }
     }
   }
   ui.reticle.classList.toggle('repair',dim);
-  ui.reticle.classList.toggle('near-target',nearCenter);
+  ui.reticle.classList.toggle('near-target',nearTarget);
 }
 
 const repair={active:false,target:'KeyA',phaseT:0,speed:.8};
@@ -932,7 +981,7 @@ function updatePlayer(dt){
   if(ex){ex.scale.setScalar(.8+Math.random()*.5);ex.material.opacity=.5+Math.random()*.4;}
   if(keys.has('KeyR')&&!repair.active&&player.hp<100)startRepair();if(repair.active)updateRepair(dt);
   player.fireCd-=dt;const tier=currentTier();
-  if(keys.has('Space')&&!repair.active&&player.fireCd<=0){fireWeapon();player.fireCd=tier.cd;}
+  if((keys.has('Space')||mouse.down)&&!repair.active&&player.fireCd<=0){fireWeapon();player.fireCd=tier.cd;}
   if(player.weaponTimer>0){player.weaponTimer-=dt;if(player.weaponTimer<=0){player.weapon='single';if(ui.weaponName)ui.weaponName.textContent='Single Shot';if(ui.weaponRule)ui.weaponRule.textContent='Combo expired';}}
   player.survival=(performance.now()-player.startTime)/1000;
 }
@@ -1095,7 +1144,7 @@ let last=performance.now();
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}dt*=timeScale;
-  updatePlayer(dt);updatePlayerDamageEffects(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
+  updatePlayer(dt);updatePlayerDamageEffects(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);updateAim(dt);environment.update(dt,player.survival);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

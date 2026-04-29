@@ -379,11 +379,13 @@ function clampAimToPlayArea(x,y){
   mouse.targetX=THREE.MathUtils.clamp(x,cx-maxX,cx+maxX);
   mouse.targetY=THREE.MathUtils.clamp(y,cy-maxY,cy+maxY);
 }
+clampAimToPlayArea(innerWidth/2,innerHeight/2);
 window.addEventListener('pointermove',e=>clampAimToPlayArea(e.clientX,e.clientY));
 window.addEventListener('pointerdown',e=>{
   if(e.button===0){e.preventDefault();clampAimToPlayArea(e.clientX,e.clientY);mouse.down=true;ensureAudio();}
 });
 window.addEventListener('pointerup',e=>{if(e.button===0)mouse.down=false;});
+window.addEventListener('pointercancel',()=>{mouse.down=false;});
 window.addEventListener('blur',()=>{mouse.down=false;});
 window.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('resize',()=>clampAimToPlayArea(mouse.targetX,mouse.targetY));
@@ -687,7 +689,7 @@ function setWeaponFromCombo(combo){
 function currentTier(){return weaponTiers.find(t=>t.id===player.weapon)||weaponTiers.at(-1);}
 
 function updateAim(dt){
-  const alpha=1-Math.exp(-dt*14);
+  const alpha=1-Math.exp(-dt*24);
   mouse.x=THREE.MathUtils.lerp(mouse.x,mouse.targetX,alpha);
   mouse.y=THREE.MathUtils.lerp(mouse.y,mouse.targetY,alpha);
   aimNdc.set((mouse.x/innerWidth)*2-1,-(mouse.y/innerHeight)*2+1);
@@ -700,6 +702,7 @@ function updateAim(dt){
   }
 }
 function aimedDirectionFrom(start,angle=0){
+  aimNdc.set((mouse.x/innerWidth)*2-1,-(mouse.y/innerHeight)*2+1);
   aimRaycaster.setFromCamera(aimNdc,camera);
   aimWorldPoint.copy(aimRaycaster.ray.origin).addScaledVector(aimRaycaster.ray.direction,140);
   const dir=aimWorldPoint.clone().sub(start).normalize();
@@ -1144,7 +1147,7 @@ let last=performance.now();
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}dt*=timeScale;
-  updatePlayer(dt);updatePlayerDamageEffects(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);updateAim(dt);environment.update(dt,player.survival);updateUI();
+  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

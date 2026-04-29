@@ -373,6 +373,8 @@ const gameKeys=new Set(['Space','KeyW','KeyA','KeyS','KeyD','KeyR','ShiftLeft','
 const keys=new Set();
 const aimNdc=new THREE.Vector2(),aimRaycaster=new THREE.Raycaster(),aimDir=new THREE.Vector3(),aimWorldPoint=new THREE.Vector3();
 const aimAssistProbe=new THREE.Vector3(),aimAssistDir=new THREE.Vector3();
+const aimAssistConfig={enabled:true,radius:.26,maxStrength:.58,stickTime:.2,farScale:.05};
+const aimAssistState={target:null,timer:0,active:false,strength:0};
 window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();});
 window.addEventListener('keyup',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.delete(e.code);});
 const mouse={x:innerWidth/2,y:innerHeight/2,targetX:innerWidth/2,targetY:innerHeight/2,down:false};
@@ -393,6 +395,10 @@ function resetAimToCenter(){
 function moveAimByDelta(dx,dy){
   clampAimToPlayArea(mouse.targetX+dx,mouse.targetY+dy);
 }
+function releaseMouseCapture(){
+  mouse.down=false;
+  if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();
+}
 resetAimToCenter();
 window.addEventListener('pointermove',e=>{
   if(document.pointerLockElement===renderer.domElement)return;
@@ -404,12 +410,10 @@ window.addEventListener('mousemove',e=>{
 renderer.domElement.addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
   e.preventDefault();mouse.down=true;ensureAudio();
-  const lock=renderer.domElement.requestPointerLock?.();
-  lock?.catch?.(()=>{});
 });
 window.addEventListener('pointerup',e=>{if(e.button===0)mouse.down=false;});
 window.addEventListener('pointercancel',()=>{mouse.down=false;});
-window.addEventListener('blur',()=>{mouse.down=false;});
+window.addEventListener('blur',releaseMouseCapture);
 document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==renderer.domElement)mouse.down=false;});
 window.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('resize',()=>clampAimToPlayArea(mouse.targetX,mouse.targetY));
@@ -714,6 +718,7 @@ function updateAim(dt){
   const alpha=1-Math.exp(-dt*24);
   mouse.x=THREE.MathUtils.lerp(mouse.x,mouse.targetX,alpha);
   mouse.y=THREE.MathUtils.lerp(mouse.y,mouse.targetY,alpha);
+  aimAssistState.timer=Math.max(0,aimAssistState.timer-dt);
   syncAimNdcFromMouse();
   aimRaycaster.setFromCamera(aimNdc,camera);
   aimDir.copy(aimRaycaster.ray.direction).normalize();
@@ -723,21 +728,56 @@ function updateAim(dt){
     ui.reticle.style.top=mouse.y+'px';
   }
 }
+function enemyAssistRadius(enemy){
+  const dist=enemy.group.position.distanceTo(camera.position);
+  return THREE.MathUtils.clamp(aimAssistConfig.radius+dist*aimAssistConfig.farScale/100,.22,.31);
+}
+function assistTargetValid(enemy){
+  return enemy&&enemies.includes(enemy);
+}
+function findAimAssistTarget(start){
+  if(!aimAssistConfig.enabled)return null;
+  let kept=null,keptD=Infinity,keptRadius=0;
+  if(assistTargetValid(aimAssistState.target)&&aimAssistState.timer>0){
+    aimAssistProbe.copy(aimAssistState.target.group.position).project(camera);
+    keptRadius=enemyAssistRadius(aimAssistState.target)*1.18;
+    keptD=Math.hypot(aimAssistProbe.x-aimNdc.x,aimAssistProbe.y-aimNdc.y);
+    if(aimAssistProbe.z>-1&&aimAssistProbe.z<1&&Math.abs(aimAssistProbe.x)<=1.08&&Math.abs(aimAssistProbe.y)<=1.08&&keptD<keptRadius)kept=aimAssistState.target;
+  }
+  let best=kept,bestScore=kept?keptD/keptRadius:.95,bestD=keptD,bestRadius=keptRadius;
+  for(const e of enemies){
+    aimAssistProbe.copy(e.group.position).project(camera);
+    if(aimAssistProbe.z<-1||aimAssistProbe.z>1||Math.abs(aimAssistProbe.x)>1.08||Math.abs(aimAssistProbe.y)>1.08)continue;
+    const radius=enemyAssistRadius(e);
+    const d=Math.hypot(aimAssistProbe.x-aimNdc.x,aimAssistProbe.y-aimNdc.y);
+    if(d>radius)continue;
+    aimAssistDir.copy(e.group.position).sub(start).normalize();
+    const alignment=THREE.MathUtils.clamp(aimDir.dot(aimAssistDir),0,1);
+    const distanceBias=THREE.MathUtils.clamp(1-e.group.position.distanceTo(player.group.position)/120,0,.18);
+    const score=d/radius-alignment*.14-distanceBias;
+    if(score<bestScore){best=e;bestScore=score;bestD=d;bestRadius=radius;}
+  }
+  if(!best){
+    aimAssistState.target=null;
+    return null;
+  }
+  aimAssistState.target=best;aimAssistState.timer=aimAssistConfig.stickTime;
+  const falloff=1-THREE.MathUtils.smoothstep(bestD/bestRadius,0,1);
+  const strength=THREE.MathUtils.clamp(falloff*aimAssistConfig.maxStrength,0,aimAssistConfig.maxStrength);
+  return {enemy:best,strength};
+}
 function aimedDirectionFrom(start,angle=0){
   syncAimNdcFromMouse();
   aimRaycaster.setFromCamera(aimNdc,camera);
+  aimDir.copy(aimRaycaster.ray.direction).normalize();
   aimWorldPoint.copy(aimRaycaster.ray.origin).addScaledVector(aimRaycaster.ray.direction,140);
   const dir=aimWorldPoint.clone().sub(start).normalize();
-  let best=null,bestD=.16;
-  for(const e of enemies){
-    aimAssistProbe.copy(e.group.position).project(camera);
-    if(aimAssistProbe.z<-1||aimAssistProbe.z>1)continue;
-    const d=Math.hypot(aimAssistProbe.x-aimNdc.x,aimAssistProbe.y-aimNdc.y);
-    if(d<bestD){bestD=d;best=e;}
-  }
-  if(best){
-    aimAssistDir.copy(best.group.position).sub(start).normalize();
-    dir.lerp(aimAssistDir,THREE.MathUtils.clamp((.16-bestD)/.16*.24,0,.24)).normalize();
+  const assist=findAimAssistTarget(start);
+  aimAssistState.active=!!assist&&assist.strength>.04;
+  aimAssistState.strength=assist?assist.strength:0;
+  if(assist){
+    aimAssistDir.copy(assist.enemy.group.position).sub(start).normalize();
+    dir.lerp(aimAssistDir,assist.strength).normalize();
   }
   if(angle){
     dir.applyAxisAngle(camera.up,angle).normalize();
@@ -860,6 +900,7 @@ const reticleProbe=new THREE.Vector3();
 function updateReticleState(){
   if(!ui.reticle)return;
   const dim=repair.active||!player.alive;
+  if(dim){aimAssistState.active=false;aimAssistState.strength=0;}
   let nearTarget=false;
   if(!dim){
     for(const e of enemies){
@@ -871,6 +912,7 @@ function updateReticleState(){
   }
   ui.reticle.classList.toggle('repair',dim);
   ui.reticle.classList.toggle('near-target',nearTarget);
+  ui.reticle.classList.toggle('assist',!dim&&aimAssistState.active);
 }
 
 const repair={active:false,target:'KeyA',phaseT:0,speed:.8};
@@ -967,6 +1009,7 @@ function damagePlayer(n){
 }
 function endGame(){
   if(!player.alive)return;player.alive=false;endRepair();
+  releaseMouseCapture();
   if(ui.finalTime)ui.finalTime.textContent=player.survival.toFixed(1)+'s';
   if(ui.finalKills)ui.finalKills.textContent=player.kills;
   if(ui.finalCombo)ui.finalCombo.textContent='x'+player.maxCombo;
@@ -976,6 +1019,7 @@ function endGame(){
   if(ui.lastStand)ui.lastStand.classList.add('show');flash(.7);boom();
 }
 function resetGame(){
+  releaseMouseCapture();
   bullets.splice(0).forEach(b=>scene.remove(b.mesh));
   enemies.splice(0).forEach(e=>scene.remove(e.group));
   particles.splice(0).forEach(p=>scene.remove(p.mesh));
@@ -983,6 +1027,7 @@ function resetGame(){
   scorePopups.splice(0).forEach(p=>p.el.remove());
   ambientTracerTimer = 0;
   nextGunSide = -1;
+  Object.assign(aimAssistState,{target:null,timer:0,active:false,strength:0});
   Object.assign(playerDamageFx,{smokeTimer:0,sparkTimer:0,fireTimer:0});
   Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,cameraKick:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0});
   updatePlayerDamageVisuals(0);

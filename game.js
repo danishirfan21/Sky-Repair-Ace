@@ -583,6 +583,7 @@ function fireWeapon(){
   else if(player.weapon==='explosive'){shootOne(nextGunSide * .28,0,tier.color,true);nextGunSide*=-1;}
   else if(player.weapon==='overdrive'){[-.22,-.11,0,.11,.22].forEach((a,i)=>shootOne((i%2?-0.28:0.28)+(Math.random()-.5)*.08,a,tier.color,true));}
   else {shootOne(nextGunSide * .28,0,tier.color,false);nextGunSide*=-1;}
+  pulseReticleFire();
   beep(player.weapon==='single'?520:player.weapon==='rapid'?650:760,.035,.025,'square');
 }
 
@@ -593,6 +594,47 @@ const ui={};
  'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
+ui.reticle=document.getElementById('aimReticle');
+
+const reticleTimers={fire:null,hit:null,kill:null};
+function restartReticlePulse(cls,duration){
+  if(!ui.reticle)return;
+  if(reticleTimers[cls])clearTimeout(reticleTimers[cls]);
+  ui.reticle.classList.remove(cls);
+  void ui.reticle.offsetWidth;
+  ui.reticle.classList.add(cls);
+  reticleTimers[cls]=setTimeout(()=>{
+    if(ui.reticle)ui.reticle.classList.remove(cls);
+    reticleTimers[cls]=null;
+  },duration);
+}
+function pulseReticleFire(){
+  restartReticlePulse('fire',80);
+}
+function pulseReticleHit(){
+  if(ui.reticle)ui.reticle.classList.remove('fire');
+  restartReticlePulse('hit',170);
+}
+function pulseReticleKill(){
+  if(ui.reticle)ui.reticle.classList.remove('fire','hit');
+  restartReticlePulse('kill',200);
+}
+const reticleProbe=new THREE.Vector3();
+function updateReticleState(){
+  if(!ui.reticle)return;
+  const dim=repair.active||!player.alive;
+  let nearCenter=false;
+  if(!dim){
+    for(const e of enemies){
+      reticleProbe.copy(e.group.position).project(camera);
+      if(reticleProbe.z>-1&&reticleProbe.z<1&&Math.abs(reticleProbe.x)<.08&&Math.abs(reticleProbe.y)<.08){
+        nearCenter=true;break;
+      }
+    }
+  }
+  ui.reticle.classList.toggle('repair',dim);
+  ui.reticle.classList.toggle('near-target',nearCenter);
+}
 
 const repair={active:false,target:'KeyA',phaseT:0,speed:.8};
 const repairKeys=['KeyA','KeyS','KeyD','KeyW'];
@@ -834,9 +876,11 @@ function updateBullets(dt){
         if(b.pos.distanceTo(e.group.position)<1.35){
           e.hp-=b.explosive?3:1;
           hitImpact(b.pos, b.color || 0xffd27a);
+          pulseReticleHit();
           if(b.explosive)explosion(e.group.position.clone(), true);
           scene.remove(b.mesh);bullets.splice(i,1);
           if(e.hp<=0){
+            pulseReticleKill();
             explosion(e.group.position, true);scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;
             floatingText('+50', e.group.position, '#ffd27a'); flashScreen(0.12, 'white'); beep(760, .07, .045, 'triangle');
           }break;
@@ -877,6 +921,7 @@ function updateUI(){
   if(ui.enemyCount)ui.enemyCount.textContent=enemies.length;
   if(ui.warn)ui.warn.style.opacity=player.hp<30&&player.alive?1:0;
   if(ui.vignette)ui.vignette.style.opacity=player.hp<32&&player.alive?.9:0;
+  updateReticleState();
 }
 let last=performance.now();
 function animate(now=performance.now()){

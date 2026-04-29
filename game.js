@@ -400,6 +400,8 @@ scene.add(player.group);player.group.rotation.y=Math.PI;
 const bullets=[],enemies=[],particles=[];
 const vfx = [];
 const scorePopups = [];
+let ambientTracerTimer = 0;
+let nextGunSide = -1;
 function spawnEnemy(){
   if(!player.alive)return;
   const e={group:makePlane(0x405986,0xcbd8ef),hp:2,
@@ -442,6 +444,12 @@ function flashScreen(amount = 0.4, color = 'white') {
 }
 function flash(amt=.55){flashScreen(amt, 'white');}
 function hitImpact(pos, color = 0xffd27a) {
+  const center = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeRadialTexture('rgba(255,255,245,1)', 'rgba(255,210,120,0)', 64),
+    transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false
+  }));
+  center.position.copy(pos); center.scale.set(1.35, 1.35, 1); scene.add(center);
+  vfx.push({ mesh: center, life: 0.07, max: 0.07, type: 'flash', grow: 3.8 });
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({
     map: makeRadialTexture('rgba(255,250,190,1)', 'rgba(255,90,20,0)', 96),
     color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false
@@ -499,61 +507,82 @@ function setWeaponFromCombo(combo){
 }
 function currentTier(){return weaponTiers.find(t=>t.id===player.weapon)||weaponTiers.at(-1);}
 
+function alignTracerMesh(mesh, start, end, minLength = 0) {
+  const dir = end.clone().sub(start);
+  if (dir.lengthSq() < 0.0001) return;
+  dir.normalize();
+  const length = Math.max(start.distanceTo(end), minLength);
+  const tail = end.clone().addScaledVector(dir, -length);
+  mesh.position.copy(tail).add(end).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  mesh.scale.y = length;
+}
 function createTracerMesh({
   color = 0xffd36a,
-  length = 10,
   radius = 0.065,
   glowMultiplier = 6,
   glowOpacity = 0.42
 } = {}) {
   const group = new THREE.Group();
   const core = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius, length, 10),
+    new THREE.CylinderGeometry(radius, radius, 1, 10),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
   );
-  core.rotation.x = Math.PI / 2; core.position.z = -length * 0.5; group.add(core);
+  group.add(core);
   const glow = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * glowMultiplier, radius * glowMultiplier * 0.55, length * 1.08, 10, 1, true),
+    new THREE.CylinderGeometry(radius * glowMultiplier, radius * glowMultiplier * 0.55, 1.08, 10, 1, true),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: glowOpacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
   );
-  glow.rotation.x = Math.PI / 2; glow.position.z = -length * 0.54; group.add(glow);
+  group.add(glow);
   group.userData.coreOpacity = 1;
   group.userData.glowOpacity = glowOpacity;
   return group;
 }
-function muzzleFlash(pos, color = 0xffd27a) {
+function spawnTracerAfterimage(start, end, color, hostile = false) {
+  const trail = createTracerMesh({
+    color,
+    radius: hostile ? 0.028 : 0.032,
+    glowMultiplier: hostile ? 4.8 : 5.2,
+    glowOpacity: hostile ? 0.24 : 0.2
+  });
+  alignTracerMesh(trail, start, end, hostile ? 3.6 : 4.8);
+  scene.add(trail);
+  vfx.push({ mesh: trail, life: 0.11, max: 0.11, type: 'beamTrail' });
+}
+function muzzleFlash(pos, color = 0xffd27a, size = 1.55) {
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({
     map: makeRadialTexture('rgba(255,235,150,1)', 'rgba(255,120,30,0)', 64),
     color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false
   }));
-  flash.position.copy(pos); flash.scale.set(1.55, 1.55, 1); scene.add(flash);
+  flash.position.copy(pos); flash.scale.set(size, size, 1); scene.add(flash);
   vfx.push({ mesh: flash, life: 0.09, max: 0.09, type: 'flash', grow: 3.2 });
 }
 function shootOne(offX,angle=0,color=currentTier().color,explosive=false){
   const tracerColor = explosive ? 0xff8a35 : 0xffd36a;
+  const overdrive = player.weapon === 'overdrive';
   const m = createTracerMesh({
     color: tracerColor,
-    length: player.weapon === 'overdrive' ? 12 : 10.5,
-    radius: player.weapon === 'overdrive' ? 0.075 : 0.065,
+    radius: overdrive ? 0.068 : 0.045,
     glowMultiplier: 6.3,
-    glowOpacity: 0.45
+    glowOpacity: overdrive ? 0.4 : 0.34
   });
-  m.position.copy(player.group.position).add(new THREE.Vector3(offX,.08,-1.7));
-  scene.add(m);
   const dir=new THREE.Vector3(Math.sin(angle),0,-Math.cos(angle)).normalize();
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-  bullets.push({mesh:m,vel:dir.multiplyScalar(player.weapon === 'overdrive' ? 105 : 98),life:1,maxLife:1,hostile:false,explosive,color:tracerColor});
-  muzzleFlash(player.group.position.clone().add(new THREE.Vector3(offX, 0.08, -1.7)), color);
+  const start = player.group.position.clone().add(new THREE.Vector3(offX,.12,-2.75));
+  const tracerLength = overdrive ? 10.5 : 7;
+  alignTracerMesh(m, start.clone().addScaledVector(dir, -tracerLength), start, tracerLength);
+  scene.add(m);
+  bullets.push({mesh:m,pos:start.clone(),vel:dir.multiplyScalar(overdrive ? 105 : 98),life:1,maxLife:1,hostile:false,explosive,color:tracerColor,prevPos:start.clone(),tracerLength,trailT:0});
+  muzzleFlash(start, color, explosive ? 1.15 : overdrive ? 1.1 : 0.92);
   player.shake = Math.max(player.shake, 0.045);
   player.cameraKick = Math.max(player.cameraKick || 0, 0.13);
 }
 function fireWeapon(){
   const tier=currentTier();
-  if(player.weapon==='dual'){shootOne(-.34);shootOne(.34);}
-  else if(player.weapon==='spread'){[-.18,-.09,0,.09,.18].forEach(a=>shootOne(0,a));}
-  else if(player.weapon==='explosive'){shootOne(0,0,tier.color,true);}
-  else if(player.weapon==='overdrive'){[-.22,-.11,0,.11,.22].forEach(a=>shootOne((Math.random()-.5)*.55,a,tier.color,true));}
-  else shootOne(0,0,tier.color,false);
+  if(player.weapon==='dual'){shootOne(-.28);shootOne(.28);}
+  else if(player.weapon==='spread'){[-.18,-.09,0,.09,.18].forEach((a,i)=>shootOne(i%2?-0.28:0.28,a));}
+  else if(player.weapon==='explosive'){shootOne(nextGunSide * .28,0,tier.color,true);nextGunSide*=-1;}
+  else if(player.weapon==='overdrive'){[-.22,-.11,0,.11,.22].forEach((a,i)=>shootOne((i%2?-0.28:0.28)+(Math.random()-.5)*.08,a,tier.color,true));}
+  else {shootOne(nextGunSide * .28,0,tier.color,false);nextGunSide*=-1;}
   beep(player.weapon==='single'?520:player.weapon==='rapid'?650:760,.035,.025,'square');
 }
 
@@ -634,16 +663,17 @@ function showNearMiss(){
 }
 
 function enemyBullet(pos,dir){
+  muzzleFlash(pos, 0xff3b1f, 0.9);
   const g = createTracerMesh({
     color: 0xff3b1f,
-    length: 8.5,
     radius: 0.055,
     glowMultiplier: 6,
     glowOpacity: 0.42
   });
-  g.position.copy(pos);scene.add(g);
-  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-  bullets.push({mesh:g,vel:dir.multiplyScalar(58),life:3,maxLife:3,hostile:true,explosive:false,nearChecked:false});
+  const tracerLength = 8.5;
+  alignTracerMesh(g, pos.clone().addScaledVector(dir, -tracerLength), pos, tracerLength);
+  scene.add(g);
+  bullets.push({mesh:g,pos:pos.clone(),vel:dir.multiplyScalar(58),life:3,maxLife:3,hostile:true,explosive:false,nearChecked:false,color:0xff3b1f,prevPos:pos.clone(),tracerLength,trailT:0});
 }
 function damagePlayer(n){
   player.hp=Math.max(0,player.hp-n);
@@ -667,6 +697,10 @@ function resetGame(){
   bullets.splice(0).forEach(b=>scene.remove(b.mesh));
   enemies.splice(0).forEach(e=>scene.remove(e.group));
   particles.splice(0).forEach(p=>scene.remove(p.mesh));
+  vfx.splice(0).forEach(fx=>scene.remove(fx.mesh));
+  scorePopups.splice(0).forEach(p=>p.el.remove());
+  ambientTracerTimer = 0;
+  nextGunSide = -1;
   Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,cameraKick:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0});
   player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);
   if(ui.lastStand)ui.lastStand.classList.remove('show');for(let i=0;i<5;i++)spawnEnemy();
@@ -736,13 +770,51 @@ function updateVFX(dt) {
       fx.mesh.material.opacity = k; const grow = fx.grow || 1; fx.mesh.scale.multiplyScalar(1 + dt * grow);
     } else if (fx.type === 'streak') {
       fx.mesh.material.opacity = 0.55 * k; fx.mesh.scale.z = 0.5 + k;
+    } else if (fx.type === 'beamTrail') {
+      if (fx.mesh.children) {
+        fx.mesh.children.forEach((child, idx) => {
+          if (child.material) child.material.opacity = (idx === 0 ? 0.65 : (fx.mesh.userData.glowOpacity || 0.2)) * k;
+        });
+      }
     } else { if (fx.mesh.material) fx.mesh.material.opacity = k; }
     if (fx.life <= 0) { scene.remove(fx.mesh); vfx.splice(i, 1); }
   }
 }
+function spawnAmbientTracer() {
+  const hostile = Math.random() > 0.35;
+  const color = hostile ? 0xff3b1f : 0xffc65a;
+  const dir = new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.12, hostile ? 1 : -1).normalize();
+  const head = new THREE.Vector3((Math.random() - 0.5) * 48, -4 + Math.random() * 16, -70 - Math.random() * 62);
+  const tracer = createTracerMesh({
+    color,
+    radius: hostile ? 0.026 : 0.03,
+    glowMultiplier: 4.8,
+    glowOpacity: hostile ? 0.18 : 0.15
+  });
+  alignTracerMesh(tracer, head.clone().addScaledVector(dir, -8 - Math.random() * 4), head, hostile ? 8 : 9.5);
+  scene.add(tracer);
+  vfx.push({ mesh: tracer, vel: dir.multiplyScalar(16 + Math.random() * 10), life: 0.18 + Math.random() * 0.07, max: 0.25, type: 'beamTrail' });
+}
+function updateAmbientCombat(dt) {
+  if (!player.alive) return;
+  ambientTracerTimer -= dt;
+  if (ambientTracerTimer <= 0) {
+    spawnAmbientTracer();
+    ambientTracerTimer = 0.26 + Math.random() * 0.26;
+  }
+}
 function updateBullets(dt){
   for(let i=bullets.length-1;i>=0;i--){
-    const b=bullets[i];b.mesh.position.addScaledVector(b.vel,dt);b.life-=dt;
+    const b=bullets[i];
+    if(!b.pos)b.pos=b.mesh.position.clone();
+    b.prevPos = b.pos.clone();
+    b.pos.addScaledVector(b.vel,dt);b.life-=dt;
+    alignTracerMesh(b.mesh, b.prevPos, b.pos, b.tracerLength || 0);
+    b.trailT=(b.trailT || 0)-dt;
+    if(b.trailT<=0){
+      spawnTracerAfterimage(b.prevPos, b.pos, b.color || (b.hostile ? 0xff3b1f : 0xffd36a), b.hostile);
+      b.trailT=b.hostile ? 0.07 : 0.055;
+    }
     if (b.maxLife) {
       const k = Math.max(0, b.life / b.maxLife);
       const fade = THREE.MathUtils.smoothstep(k, 0.02, 0.28);
@@ -754,14 +826,14 @@ function updateBullets(dt){
     }
     if(b.life<=0){scene.remove(b.mesh);bullets.splice(i,1);continue;}
     if(b.hostile){
-      const d=b.mesh.position.distanceTo(player.group.position);
+      const d=b.pos.distanceTo(player.group.position);
       if(d<.9){damagePlayer(7);scene.remove(b.mesh);bullets.splice(i,1);continue;}
-      if(repair.active&&!b.nearChecked&&d>1.0&&d<2.15&&Math.abs(b.mesh.position.z-player.group.position.z)<1.2){b.nearChecked=true;showNearMiss();}
+      if(repair.active&&!b.nearChecked&&d>1.0&&d<2.15&&Math.abs(b.pos.z-player.group.position.z)<1.2){b.nearChecked=true;showNearMiss();}
     }else{
       for(let j=enemies.length-1;j>=0;j--){const e=enemies[j];
-        if(b.mesh.position.distanceTo(e.group.position)<1.35){
+        if(b.pos.distanceTo(e.group.position)<1.35){
           e.hp-=b.explosive?3:1;
-          hitImpact(b.mesh.position, b.color || 0xffd27a);
+          hitImpact(b.pos, b.color || 0xffd27a);
           if(b.explosive)explosion(e.group.position.clone(), true);
           scene.remove(b.mesh);bullets.splice(i,1);
           if(e.hp<=0){
@@ -810,7 +882,7 @@ let last=performance.now();
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}dt*=timeScale;
-  updatePlayer(dt);updateEnemies(dt);updateBullets(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
+  updatePlayer(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

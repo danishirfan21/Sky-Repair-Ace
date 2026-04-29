@@ -392,16 +392,64 @@ function makePlane(color=0xffa85c,accent=0xffe0a0){
   return g;
 }
 
+function createPlayerDamageVisuals(plane){
+  const root=new THREE.Group();plane.add(root);
+  function patch(pos,scale,rot=0,color=0x15120f){
+    const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),mat);
+    m.position.set(...pos);m.rotation.set(-Math.PI/2,0,rot);m.scale.set(...scale);root.add(m);return m;
+  }
+  function chip(pos,scale,rot=0,color=0x1a120d){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color,transparent:true,opacity:0}));
+    m.position.set(...pos);m.rotation.set(0,0,rot);m.scale.set(...scale);root.add(m);return m;
+  }
+  const engineMat=new THREE.MeshBasicMaterial({color:0x160f0b,transparent:true,opacity:0,side:THREE.DoubleSide});
+  const engineChar=new THREE.Mesh(new THREE.TorusGeometry(.36,.025,8,24),engineMat);
+  engineChar.position.set(0,0,1.5);root.add(engineChar);
+  const emberMat=new THREE.MeshBasicMaterial({color:0xff8a24,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+  const ember=new THREE.Mesh(new THREE.SphereGeometry(.11,8,6),emberMat);
+  ember.position.set(0,.03,1.48);root.add(ember);
+  return {
+    level1:[
+      patch([-.72,.675,-.16],[.74,.2,1],-.18,0x2b2925),
+      patch([.82,.675,.26],[.52,.18,1],.2,0x2b2925),
+      patch([-.14,.38,.76],[.34,.18,1],.08,0x2a2119)
+    ],
+    level2:[
+      patch([-1.42,.675,.1],[.62,.22,1],.42,0x15120f),
+      patch([1.36,.675,-.22],[.55,.2,1],-.36,0x15120f),
+      patch([.08,.42,1.08],[.42,.22,1],-.12,0x18110d),
+      chip([-1.72,.69,.36],[.28,.028,.08],.28),
+      chip([1.64,.69,-.34],[.22,.028,.07],-.22),
+      engineChar
+    ],
+    level3:[
+      patch([-1.05,.69,-.38],[.92,.25,1],-.28,0x0f0c09),
+      patch([1.03,.69,.42],[.8,.24,1],.24,0x0f0c09),
+      patch([0,.43,1.22],[.5,.28,1],0,0x100b08),
+      chip([-1.9,.69,.02],[.38,.034,.1],.16,0x0f0c09),
+      chip([1.84,.69,.12],[.32,.034,.1],-.18,0x0f0c09),
+      ember
+    ],
+    ember
+  };
+}
+function setDamageVisualOpacity(items,opacity){
+  items.forEach(item=>{if(item.material)item.material.opacity=opacity;});
+}
+
 const player={group:makePlane(),vel:new THREE.Vector3(),hp:100,score:0,combo:0,maxCombo:0,
   weapon:'single',weaponTimer:0,fireCd:0,shake:0,cameraKick:0,kills:0,nearMisses:0,alive:true,
   startTime:performance.now(),survival:0};
 scene.add(player.group);player.group.rotation.y=Math.PI;
+const playerDamageVisuals=createPlayerDamageVisuals(player.group);
 
 const bullets=[],enemies=[],particles=[];
 const vfx = [];
 const scorePopups = [];
 let ambientTracerTimer = 0;
 let nextGunSide = -1;
+const playerDamageFx={smokeTimer:0,sparkTimer:0,fireTimer:0};
 function spawnEnemy(){
   if(!player.alive)return;
   const e={group:makePlane(0x405986,0xcbd8ef),hp:2,
@@ -432,6 +480,121 @@ function burstParticles(pos, {
 }
 function particle(pos,color=0xffb15f,count=8){
   burstParticles(pos, { color, count });
+}
+function playerLocalPoint(x,y,z){
+  return player.group.localToWorld(new THREE.Vector3(x,y,z));
+}
+function spawnDamageSmoke(level){
+  const engine=playerLocalPoint(0,0,1.45);
+  const count=level===1?1:level===2?2:3;
+  const color=level===1?0x8b9092:level===2?0x4b4b48:0x2f2e2a;
+  for(let i=0;i<count;i++){
+    const smoke=new THREE.Mesh(
+      new THREE.SphereGeometry((level===1 ? .16 : .22)+Math.random()*.16,8,6),
+      new THREE.MeshBasicMaterial({color,transparent:true,opacity:level===1 ? .16 : level===2 ? .25 : .32,depthWrite:false})
+    );
+    smoke.position.copy(engine).add(new THREE.Vector3((Math.random()-.5)*.55,(Math.random()-.5)*.3,(Math.random()-.5)*.35));
+    scene.add(smoke);
+    particles.push({
+      mesh:smoke,
+      vel:new THREE.Vector3((Math.random()-.5)*.7,.45+Math.random()*.55,1.6+Math.random()*1.2),
+      life:level===1 ? .9 : level===2 ? 1.12 : 1.28,
+      max:level===1 ? .9 : level===2 ? 1.12 : 1.28,
+      drag:.985,
+      grow:true,
+      baseOpacity:level===1 ? .14 : level===2 ? .24 : .32,
+      damageSmoke:true
+    });
+  }
+}
+function spawnDamageSparks(level){
+  const hard=level>=3;
+  const origin=Math.random()>.55?playerLocalPoint((Math.random()>.5?1:-1)*(1.1+Math.random()*.45),.46,0):playerLocalPoint(0,0,1.35);
+  burstParticles(origin,{
+    color:hard?0xff8a2b:0xffb347,
+    count:hard?7:3,
+    speed:hard?9:6,
+    size:[0.025,hard ? .075 : .055],
+    life:[0.12,hard ? .34 : .25],
+    gravity:hard?3:2,
+    drag:.9,
+    additive:true
+  });
+}
+function spawnEngineFire(){
+  const fire=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:makeRadialTexture('rgba(255,210,92,1)','rgba(255,70,16,0)',64),
+    transparent:true,opacity:.72,blending:THREE.AdditiveBlending,depthWrite:false
+  }));
+  fire.position.copy(playerLocalPoint(0,0,1.38)).add(new THREE.Vector3((Math.random()-.5)*.18,(Math.random()-.5)*.12,0));
+  const s=.55+Math.random()*.28;fire.scale.set(s,s,1);scene.add(fire);
+  vfx.push({mesh:fire,life:.08,max:.08,type:'flash',grow:2.4});
+}
+function spawnRepairSparks(perfect=false){
+  const origin=playerLocalPoint(0,.05,1.25);
+  burstParticles(origin,{
+    color:perfect?0x66f7ff:0xffd27a,
+    count:perfect?16:6,
+    speed:perfect?10:6,
+    size:[0.025,perfect ? .08 : .055],
+    life:[0.16,perfect ? .42 : .28],
+    gravity:perfect?0:1,
+    drag:.92,
+    additive:true
+  });
+}
+function playerDamageLevel(){
+  if(player.hp<40)return 3;
+  if(player.hp<65)return 2;
+  if(player.hp<85)return 1;
+  return 0;
+}
+function updatePlayerDamageVisuals(level){
+  setDamageVisualOpacity(playerDamageVisuals.level1,level>=1 ? .45 : 0);
+  setDamageVisualOpacity(playerDamageVisuals.level2,level>=2 ? .62 : 0);
+  setDamageVisualOpacity(playerDamageVisuals.level3,level>=3 ? .72 : 0);
+  if(playerDamageVisuals.ember.material){
+    playerDamageVisuals.ember.material.opacity=level>=3 ? .28+Math.random()*.34 : 0;
+    const s=level>=3 ? .86+Math.random()*.34 : .86;
+    playerDamageVisuals.ember.scale.setScalar(s);
+  }
+}
+function calmPlayerDamageSmoke(){
+  const level=playerDamageLevel();
+  for(const p of particles){
+    if(!p.damageSmoke)continue;
+    p.life=Math.min(p.life,level===0 ? .22 : level===1 ? .38 : .65);
+  }
+}
+function updatePlayerDamageEffects(dt){
+  const level=player.alive?playerDamageLevel():0;
+  updatePlayerDamageVisuals(level);
+  if(!player.alive)return;
+  if(!level){
+    playerDamageFx.smokeTimer=Math.min(playerDamageFx.smokeTimer,.28);
+    playerDamageFx.sparkTimer=Math.min(playerDamageFx.sparkTimer,.45);
+    playerDamageFx.fireTimer=Math.min(playerDamageFx.fireTimer,.12);
+    return;
+  }
+  playerDamageFx.smokeTimer-=dt;
+  if(playerDamageFx.smokeTimer<=0){
+    spawnDamageSmoke(level);
+    playerDamageFx.smokeTimer=(level===1 ? .48 : level===2 ? .3 : .2)+Math.random()*(level===1 ? .18 : .08);
+  }
+  if(level>=2){
+    playerDamageFx.sparkTimer-=dt;
+    if(playerDamageFx.sparkTimer<=0){
+      spawnDamageSparks(level);
+      playerDamageFx.sparkTimer=(level===2 ? .72 : .34)+Math.random()*(level===2 ? .42 : .24);
+    }
+  }
+  if(level>=3){
+    playerDamageFx.fireTimer-=dt;
+    if(playerDamageFx.fireTimer<=0){
+      spawnEngineFire();
+      playerDamageFx.fireTimer=.09+Math.random()*.08;
+    }
+  }
 }
 function flashScreen(amount = 0.4, color = 'white') {
   if(ui.flash){
@@ -662,6 +825,9 @@ function repairSuccess(perfect){
   if(ui.fill)ui.fill.style.width=Math.min(100,player.combo*7)+'%';
   if(ui.status)ui.status.textContent=perfect?'PERFECT WEAPON CHARGE!':'GOOD';
   particle(player.group.position.clone().add(new THREE.Vector3(0,0,.4)),perfect?0x66f7ff:0xffd27a,perfect?12:6);
+  if(perfect)spawnRepairSparks(true);
+  calmPlayerDamageSmoke();
+  playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
   beep(perfect?920:520,.09,.045,perfect?'triangle':'sine');
   if(perfect){slowmo(.25,.34);flash(.55);}
   setWeaponFromCombo(player.combo);nextRepairPrompt();
@@ -743,7 +909,9 @@ function resetGame(){
   scorePopups.splice(0).forEach(p=>p.el.remove());
   ambientTracerTimer = 0;
   nextGunSide = -1;
+  Object.assign(playerDamageFx,{smokeTimer:0,sparkTimer:0,fireTimer:0});
   Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,cameraKick:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0});
+  updatePlayerDamageVisuals(0);
   player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);
   if(ui.lastStand)ui.lastStand.classList.remove('show');for(let i=0;i<5;i++)spawnEnemy();
 }
@@ -899,7 +1067,7 @@ function updateParticles(dt) {
     p.mesh.position.addScaledVector(p.vel, dt);
     const k = Math.max(0, p.life / p.max);
     if (p.mesh.material) p.mesh.material.opacity = k;
-    if (p.grow) { p.mesh.scale.multiplyScalar(1 + dt * 1.4); if (p.mesh.material) p.mesh.material.opacity = 0.34 * k; }
+    if (p.grow) { p.mesh.scale.multiplyScalar(1 + dt * 1.4); if (p.mesh.material) p.mesh.material.opacity = (p.baseOpacity ?? 0.34) * k; }
   }
 }
 function updateCamera(dt){
@@ -927,7 +1095,7 @@ let last=performance.now();
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}dt*=timeScale;
-  updatePlayer(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
+  updatePlayer(dt);updatePlayerDamageEffects(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

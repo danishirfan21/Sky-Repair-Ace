@@ -32,7 +32,11 @@ window.addEventListener('resize',()=>{
 
 // Audio
 const AudioCtx=window.AudioContext||window.webkitAudioContext;let ctx;
-function ensureAudio(){if(!ctx)ctx=new AudioCtx();ctx.resume?.();}
+function ensureAudio(){
+  if(!ctx)ctx=new AudioCtx();
+  ctx.resume?.();
+  audio.unlock();
+}
 function beep(freq=440,dur=.08,g=.045,type='sine'){
   if(!ctx)return;const o=ctx.createOscillator(),gn=ctx.createGain();o.type=type;o.frequency.value=freq;
   gn.gain.setValueAtTime(g,ctx.currentTime);gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+dur);
@@ -40,6 +44,122 @@ function beep(freq=440,dur=.08,g=.045,type='sine'){
 }
 function boom(){beep(80,.22,.08,'sawtooth');setTimeout(()=>beep(45,.18,.06,'square'),20);}
 function whoosh(){beep(180,.05,.045,'triangle');setTimeout(()=>beep(520,.08,.035,'sine'),35);}
+function createAudioManager(paths){
+  const clips=new Map(),loops=new Map(),failed=new Set(),loopVolumes=new Map();
+  let unlocked=false;
+  for(const [name,src] of Object.entries(paths)){
+    try{
+      const el=new Audio(src);
+      el.preload='auto';
+      el.addEventListener('error',()=>failed.add(name),{once:true});
+      clips.set(name,el);
+      el.load?.();
+    }catch(e){failed.add(name);}
+  }
+  function fallback(name){
+    if(name?.includes('explosion'))boom();
+    else if(name?.includes('whiz')||name==='slowmo_enter')whoosh();
+    else beep(440,.05,.025,'sine');
+  }
+  function canUse(name){return unlocked&&clips.has(name)&&!failed.has(name);}
+  function handlePlayResult(name,result,useFallback=true){
+    if(result?.catch)result.catch(err=>{
+      if(err?.name!=='NotAllowedError')failed.add(name);
+      if(useFallback&&unlocked)fallback(name);
+    });
+  }
+  function play(name,volume=1,useFallback=true){
+    if(!canUse(name)){if(useFallback&&unlocked)fallback(name);return false;}
+    try{
+      const src=clips.get(name);
+      const el=src.cloneNode(true);
+      el.volume=THREE.MathUtils.clamp(volume,0,1);
+      el.loop=false;
+      handlePlayResult(name,el.play(),useFallback);
+      return true;
+    }catch(e){failed.add(name);if(useFallback&&unlocked)fallback(name);return false;}
+  }
+  function startLoop(name,volume=1){
+    loopVolumes.set(name,THREE.MathUtils.clamp(volume,0,1));
+    if(!canUse(name))return false;
+    let el=loops.get(name);
+    if(!el){
+      try{
+        el=clips.get(name).cloneNode(true);
+        el.loop=true;
+        el.addEventListener('error',()=>failed.add(name),{once:true});
+        loops.set(name,el);
+      }catch(e){failed.add(name);return false;}
+    }
+    el.volume=loopVolumes.get(name);
+    if(el.paused)handlePlayResult(name,el.play(),false);
+    return true;
+  }
+  function stopLoop(name){
+    const el=loops.get(name);
+    if(!el)return;
+    try{el.pause();el.currentTime=0;}catch(e){}
+  }
+  function setLoopVolume(name,volume=1){
+    const v=THREE.MathUtils.clamp(volume,0,1);
+    loopVolumes.set(name,v);
+    const el=loops.get(name);
+    if(el)el.volume=v;
+  }
+  function unlock(){
+    if(unlocked)return;
+    unlocked=true;
+    startLoop('engine_loop',.25);
+    startLoop('wind_loop',.12);
+    startLoop('distant_battle_loop',.08);
+    startLoop('music_base_loop',.12);
+    startLoop('engine_damaged_loop',0);
+  }
+  return {play,playRandom:(names,volume=1)=>play(names[Math.floor(Math.random()*names.length)],volume),startLoop,stopLoop,setLoopVolume,unlock,get unlocked(){return unlocked;}};
+}
+const audio=createAudioManager({
+  distant_battle_loop:'audio/ambience/distant_battle_loop.mp3',
+  engine_loop:'audio/engine/engine_loop.mp3',
+  engine_damaged_loop:'audio/engine/engine_damaged_loop.mp3',
+  wind_loop:'audio/engine/wind_loop.mp3',
+  slowmo_enter:'audio/fx/slowmo_enter.mp3',
+  explosion_big:'audio/impacts/explosion_big.mp3',
+  explosion_small:'audio/impacts/explosion_small.mp3',
+  hit_metal_01:'audio/impacts/hit_metal_01.mp3',
+  hit_metal_02:'audio/impacts/hit_metal_02.mp3',
+  music_base_loop:'audio/music/music_base_loop.mp3',
+  music_alt_loop:'audio/music/music_alt_loop.mp3',
+  repair_fail:'audio/repair/repair_fail.mp3',
+  repair_good:'audio/repair/repair_good.mp3',
+  repair_loop:'audio/repair/repair_loop.mp3',
+  repair_perfect:'audio/repair/repair_perfect.mp3',
+  repair_tick:'audio/repair/repair_tick.mp3',
+  critical_beep:'audio/ui/critical_beep.mp3',
+  ui_click:'audio/ui/ui_click.mp3',
+  ui_confirm:'audio/ui/ui_confirm.mp3',
+  bullet_whiz_01:'audio/weapons/bullet_whiz_01.mp3',
+  bullet_whiz_02:'audio/weapons/bullet_whiz_02.mp3',
+  mg_burst_01:'audio/weapons/mg_burst_01.mp3',
+  mg_overdrive_loop:'audio/weapons/mg_overdrive_loop.mp3'
+});
+const audioTimers={shot:0,hitConfirm:0,repairTick:0,criticalBeep:0};
+const audioMix={damagedEngine:0,music:.12};
+const hitSounds=['hit_metal_01','hit_metal_02'];
+const whizSounds=['bullet_whiz_01','bullet_whiz_02'];
+function updateAudioMix(dt){
+  if(!audio.unlocked)return;
+  const damageTarget=player.alive&&player.hp<45?.05+(45-player.hp)/45*.15:0;
+  audioMix.damagedEngine=THREE.MathUtils.lerp(audioMix.damagedEngine,damageTarget,Math.min(1,dt*2.5));
+  audio.setLoopVolume('engine_damaged_loop',audioMix.damagedEngine);
+  const musicTarget=player.alive&&player.hp<30?.16:player.alive?.12:.08;
+  audioMix.music=THREE.MathUtils.lerp(audioMix.music,musicTarget,Math.min(1,dt*1.4));
+  audio.setLoopVolume('music_base_loop',audioMix.music);
+  const now=performance.now()/1000;
+  if(player.alive&&player.hp<30&&now-audioTimers.criticalBeep>1.25){
+    audio.play('critical_beep',.18);
+    audioTimers.criticalBeep=now;
+  }
+}
 
 // Lighting
 scene.add(new THREE.HemisphereLight(0xb7cdec,0x314052,.74));
@@ -376,6 +496,7 @@ const aimAssistProbe=new THREE.Vector3(),aimAssistDir=new THREE.Vector3();
 const aimAssistConfig={enabled:true,radius:.26,maxStrength:.58,stickTime:.2,farScale:.05};
 const aimAssistState={target:null,timer:0,active:false,strength:0};
 window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();});
+window.addEventListener('pointerdown',()=>ensureAudio(),{passive:true});
 window.addEventListener('keyup',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.delete(e.code);});
 const mouse={x:innerWidth/2,y:innerHeight/2,targetX:innerWidth/2,targetY:innerHeight/2,down:false};
 function clampAimToPlayArea(x,y){
@@ -652,6 +773,9 @@ function flashScreen(amount = 0.4, color = 'white') {
 }
 function flash(amt=.55){flashScreen(amt, 'white');}
 function hitImpact(pos, color = 0xffd27a) {
+  audio.playRandom(hitSounds,.18);
+  const now=performance.now()/1000;
+  if(now-audioTimers.hitConfirm>.12){audio.play('ui_confirm',.055,false);audioTimers.hitConfirm=now;}
   const center = new THREE.Sprite(new THREE.SpriteMaterial({
     map: makeRadialTexture('rgba(255,255,245,1)', 'rgba(255,210,120,0)', 64),
     transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false
@@ -695,7 +819,8 @@ function explosion(pos, big = false) {
   l.position.copy(pos); scene.add(l);
   particles.push({ mesh: l, vel: new THREE.Vector3(), life: 0.22, max: 0.22, light: true });
   player.shake = Math.max(player.shake, big ? 0.65 : 0.42);
-  flashScreen(big ? 0.28 : 0.16, 'white'); boom();
+  flashScreen(big ? 0.28 : 0.16, 'white');
+  audio.play(big?'explosion_big':'explosion_small',big?.55:.42);
 }
 
 const weaponTiers=[
@@ -708,7 +833,7 @@ const weaponTiers=[
 ];
 function tierForCombo(c){return weaponTiers.find(t=>c>=t.combo)||weaponTiers.at(-1);}
 function setWeaponFromCombo(combo){
-  const tier=tierForCombo(combo);if(tier.id!==player.weapon){flash(.35);beep(900+combo*25,.13,.06,'triangle');}
+  const tier=tierForCombo(combo);if(tier.id!==player.weapon){flash(.35);audio.play('ui_click',.12);}
   player.weapon=tier.id;player.weaponTimer=tier.duration;
   if(ui.weaponName)ui.weaponName.textContent=tier.name;
   if(ui.weaponRule)ui.weaponRule.textContent=tier.rule;
@@ -862,7 +987,11 @@ function fireWeapon(){
   else if(player.weapon==='overdrive'){[-.22,-.11,0,.11,.22].forEach((a,i)=>shootOne((i%2?-0.28:0.28)+(Math.random()-.5)*.08,a,tier.color,true));}
   else {shootOne(nextGunSide * .28,0,tier.color,false);nextGunSide*=-1;}
   pulseReticleFire();
-  beep(player.weapon==='single'?520:player.weapon==='rapid'?650:760,.035,.025,'square');
+  const now=performance.now()/1000,shotGap=player.weapon==='overdrive'?.07:.095;
+  if(now-audioTimers.shot>shotGap){
+    audio.play('mg_burst_01',player.weapon==='overdrive'?.28:.22);
+    audioTimers.shot=now;
+  }
 }
 
 // UI refs
@@ -925,13 +1054,15 @@ function nextRepairPrompt(){
 }
 function startRepair(){
   repair.active=true;player.combo=0;
+  audio.startLoop('repair_loop',.18);
+  audioTimers.repairTick=0;
   if(ui.box)ui.box.classList.add('active');
   if(ui.status)ui.status.textContent='';
   if(ui.combo)ui.combo.textContent='COMBO x0';
   if(ui.fill)ui.fill.style.width='0%';
   nextRepairPrompt();
 }
-function endRepair(){repair.active=false;if(ui.box)ui.box.classList.remove('active');}
+function endRepair(){repair.active=false;audio.stopLoop('repair_loop');if(ui.box)ui.box.classList.remove('active');}
 let timeScale=1,slowTimer=0;
 function slowmo(dur=.25,sc=.34){timeScale=sc;slowTimer=dur;}
 
@@ -945,7 +1076,8 @@ function repairSuccess(perfect){
   if(perfect)spawnRepairSparks(true);
   calmPlayerDamageSmoke();
   playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
-  beep(perfect?920:520,.09,.045,perfect?'triangle':'sine');
+  audio.play('repair_good',.24);
+  if(perfect)audio.play('repair_perfect',.28);
   if(perfect){slowmo(.25,.34);flash(.55);}
   setWeaponFromCombo(player.combo);nextRepairPrompt();
 }
@@ -953,11 +1085,13 @@ function repairFail(){
   player.combo=0;player.hp-=12;
   if(ui.combo)ui.combo.textContent='COMBO x0';if(ui.fill)ui.fill.style.width='0%';
   if(ui.status)ui.status.textContent='MISS - SYSTEM SPARK';
-  player.shake=.35;beep(115,.16,.06,'sawtooth');particle(player.group.position,0xff4b2f,10);
+  player.shake=.35;audio.play('repair_fail',.28);particle(player.group.position,0xff4b2f,10);
   setWeaponFromCombo(0);nextRepairPrompt();
 }
 function updateRepair(dt){
   repair.phaseT+=dt*repair.speed;const phase=Math.sin(repair.phaseT*Math.PI*2)*.5+.5;
+  audioTimers.repairTick-=dt;
+  if(audioTimers.repairTick<=0){audio.play('repair_tick',.07,false);audioTimers.repairTick=.22;}
   if(ui.marker)ui.marker.style.left=(phase*300)+'px';
   const perfect=phase>.46&&phase<.54,good=phase>.31&&phase<.69;
   if(keys.has(repair.target)){if(perfect)repairSuccess(true);else if(good)repairSuccess(false);else repairFail();}
@@ -984,7 +1118,9 @@ function showNearMiss(){
   particle(player.group.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.6,.1,-.4)),0x9ffcff,8);
   nearMissStreak(player.group.position.clone());
   flashScreen(0.1, 'rgba(120,245,255,1)');
-  whoosh();slowmo(.14,.55);player.shake=.12;setWeaponFromCombo(player.combo);
+  audio.playRandom(whizSounds,.24);
+  audio.play('slowmo_enter',.18);
+  slowmo(.14,.55);player.shake=.12;setWeaponFromCombo(player.combo);
 }
 
 function enemyBullet(pos,dir){
@@ -1006,10 +1142,17 @@ function damagePlayer(n){
   flashScreen(0.32, 'rgba(255,30,20,1)');
   const pos = player.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2));
   burstParticles(pos, { color: 0xff5733, count: 12, speed: 12, size: [0.04, 0.11], life: [0.22, 0.55], additive: true });
-  beep(95,.11,.06,'sawtooth');if(player.hp<=0)endGame();
+  audio.playRandom(hitSounds,.24);
+  const now=performance.now()/1000;
+  if(player.hp<30&&now-audioTimers.criticalBeep>1.15){audio.play('critical_beep',.22);audioTimers.criticalBeep=now;}
+  if(player.hp<=0)endGame();
 }
 function endGame(){
   if(!player.alive)return;player.alive=false;endRepair();
+  audio.stopLoop('mg_overdrive_loop');
+  audio.setLoopVolume('engine_loop',.15);
+  audio.setLoopVolume('wind_loop',.07);
+  audio.setLoopVolume('music_base_loop',.08);
   releaseMouseCapture();
   if(ui.finalTime)ui.finalTime.textContent=player.survival.toFixed(1)+'s';
   if(ui.finalKills)ui.finalKills.textContent=player.kills;
@@ -1017,10 +1160,19 @@ function endGame(){
   if(ui.finalNear)ui.finalNear.textContent=player.nearMisses;
   const rank=player.survival>70||player.maxCombo>=15?'Legendary clutch pilot':player.survival>40||player.maxCombo>=8?'Elite panic mechanic':'Rookie ace under fire';
   if(ui.resultLine)ui.resultLine.textContent=`${rank} · Score ${player.score}`;
-  if(ui.lastStand)ui.lastStand.classList.add('show');flash(.7);boom();
+  if(ui.lastStand)ui.lastStand.classList.add('show');flash(.7);audio.play('explosion_big',.5);
 }
 function resetGame(){
   releaseMouseCapture();
+  audio.stopLoop('repair_loop');
+  audio.stopLoop('mg_overdrive_loop');
+  audioTimers.criticalBeep=0;
+  audioMix.damagedEngine=0;
+  audioMix.music=.12;
+  audio.setLoopVolume('engine_loop',.25);
+  audio.setLoopVolume('wind_loop',.12);
+  audio.setLoopVolume('music_base_loop',.12);
+  audio.setLoopVolume('engine_damaged_loop',0);
   bullets.splice(0).forEach(b=>scene.remove(b.mesh));
   enemies.splice(0).forEach(e=>scene.remove(e.group));
   particles.splice(0).forEach(p=>scene.remove(p.mesh));
@@ -1054,6 +1206,8 @@ function updatePlayer(dt){
   if(keys.has('KeyR')&&!repair.active&&player.hp<100)startRepair();if(repair.active)updateRepair(dt);
   player.fireCd-=dt;const tier=currentTier();
   if((keys.has('Space')||mouse.down)&&!repair.active&&player.fireCd<=0){fireWeapon();player.fireCd=tier.cd;}
+  if(player.weapon==='overdrive'&&(keys.has('Space')||mouse.down)&&!repair.active)audio.startLoop('mg_overdrive_loop',.18);
+  else audio.stopLoop('mg_overdrive_loop');
   if(player.weaponTimer>0){player.weaponTimer-=dt;if(player.weaponTimer<=0){player.weapon='single';if(ui.weaponName)ui.weaponName.textContent='Single Shot';if(ui.weaponRule)ui.weaponRule.textContent='Combo expired';}}
   player.survival=(performance.now()-player.startTime)/1000;
 }
@@ -1176,7 +1330,7 @@ function interceptBullets(){
       floatingText(`INTERCEPT +${bulletInterceptConfig.score}`,hit.midpoint,'#fff1b8');
       player.score+=bulletInterceptConfig.score;
       player.shake=Math.max(player.shake,.08);
-      whoosh();beep(980,.045,.025,'triangle');
+      audio.playRandom(whizSounds,.16);audio.play('ui_confirm',.06,false);
       break;
     }
   }
@@ -1229,7 +1383,7 @@ function updateBullets(dt){
           if(e.hp<=0){
             pulseReticleKill();
             explosion(e.group.position, true);scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;
-            floatingText('+50', e.group.position, '#ffd27a'); flashScreen(0.12, 'white'); beep(760, .07, .045, 'triangle');
+            floatingText('+50', e.group.position, '#ffd27a'); flashScreen(0.12, 'white'); audio.play('ui_confirm',.08,false);
           }break;
         }
       }
@@ -1274,7 +1428,7 @@ let last=performance.now();
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}dt*=timeScale;
-  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
+  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

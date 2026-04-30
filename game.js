@@ -127,6 +127,7 @@ const audio=createAudioManager({
   explosion_small:'audio/impacts/explosion_small.mp3',
   hit_metal_01:'audio/impacts/hit_metal_01.mp3',
   hit_metal_02:'audio/impacts/hit_metal_02.mp3',
+  player_hit_01:'audio/impacts/player_hit_01.mp3',
   music_base_loop:'audio/music/music_base_loop.mp3',
   music_alt_loop:'audio/music/music_alt_loop.mp3',
   repair_fail:'audio/repair/repair_fail.mp3',
@@ -142,7 +143,7 @@ const audio=createAudioManager({
   mg_burst_01:'audio/weapons/mg_burst_01.mp3',
   mg_overdrive_loop:'audio/weapons/mg_overdrive_loop.mp3'
 });
-const audioTimers={shot:0,hitConfirm:0,repairTick:0,criticalBeep:0};
+const audioTimers={shot:0,hitConfirm:0,hitMetal:0,repairTick:0,criticalBeep:0};
 const audioMix={damagedEngine:0,music:.12};
 const hitSounds=['hit_metal_01','hit_metal_02'];
 const whizSounds=['bullet_whiz_01','bullet_whiz_02'];
@@ -773,8 +774,8 @@ function flashScreen(amount = 0.4, color = 'white') {
 }
 function flash(amt=.55){flashScreen(amt, 'white');}
 function hitImpact(pos, color = 0xffd27a) {
-  audio.playRandom(hitSounds,.18);
   const now=performance.now()/1000;
+  if(now-audioTimers.hitMetal>.09){audio.playRandom(hitSounds,.18);audioTimers.hitMetal=now;}
   if(now-audioTimers.hitConfirm>.12){audio.play('ui_confirm',.055,false);audioTimers.hitConfirm=now;}
   const center = new THREE.Sprite(new THREE.SpriteMaterial({
     map: makeRadialTexture('rgba(255,255,245,1)', 'rgba(255,210,120,0)', 64),
@@ -987,9 +988,9 @@ function fireWeapon(){
   else if(player.weapon==='overdrive'){[-.22,-.11,0,.11,.22].forEach((a,i)=>shootOne((i%2?-0.28:0.28)+(Math.random()-.5)*.08,a,tier.color,true));}
   else {shootOne(nextGunSide * .28,0,tier.color,false);nextGunSide*=-1;}
   pulseReticleFire();
-  const now=performance.now()/1000,shotGap=player.weapon==='overdrive'?.07:.095;
-  if(now-audioTimers.shot>shotGap){
-    audio.play('mg_burst_01',player.weapon==='overdrive'?.28:.22);
+  const now=performance.now()/1000;
+  if(player.weapon!=='overdrive'&&now-audioTimers.shot>.095){
+    audio.play('mg_burst_01',.22);
     audioTimers.shot=now;
   }
 }
@@ -1076,8 +1077,7 @@ function repairSuccess(perfect){
   if(perfect)spawnRepairSparks(true);
   calmPlayerDamageSmoke();
   playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
-  audio.play('repair_good',.24);
-  if(perfect)audio.play('repair_perfect',.28);
+  audio.play(perfect?'repair_perfect':'repair_good',perfect?.28:.24);
   if(perfect){slowmo(.25,.34);flash(.55);}
   setWeaponFromCombo(player.combo);nextRepairPrompt();
 }
@@ -1142,7 +1142,7 @@ function damagePlayer(n){
   flashScreen(0.32, 'rgba(255,30,20,1)');
   const pos = player.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2));
   burstParticles(pos, { color: 0xff5733, count: 12, speed: 12, size: [0.04, 0.11], life: [0.22, 0.55], additive: true });
-  audio.playRandom(hitSounds,.24);
+  audio.play('player_hit_01',.24);
   const now=performance.now()/1000;
   if(player.hp<30&&now-audioTimers.criticalBeep>1.15){audio.play('critical_beep',.22);audioTimers.criticalBeep=now;}
   if(player.hp<=0)endGame();

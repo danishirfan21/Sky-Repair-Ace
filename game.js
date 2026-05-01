@@ -1,7 +1,7 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0x8293a2,.0041);
+scene.fog=new THREE.FogExp2(0x738899,.00315);
 const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,1000);
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -310,17 +310,17 @@ function createCloudLayer({clouds,zMin,zMax,yMin,yMax,xSpan,speed,scale,color,op
   if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
   update(0,0);return {root,update};
 }
-function createNearWisps(count=34){
+function createNearWisps(count=22){
   const root=new THREE.Group();
   const tex=makeSoftTexture('185,195,205',.38,96,.55);
-  const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:.32,depthWrite:false,blending:THREE.NormalBlending,fog:false});
+  const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:.18,depthWrite:false,blending:THREE.NormalBlending,fog:false});
   const geo=new THREE.PlaneGeometry(1,1);
   const mesh=new THREE.InstancedMesh(geo,mat,count);mesh.frustumCulled=false;root.add(mesh);
   const items=[],dummy=new THREE.Object3D();
   for(let i=0;i<count;i++)items.push({
     pos:new THREE.Vector3((Math.random()-.5)*70,-10+Math.random()*28,-22-Math.random()*62),
     speed:6+Math.random()*13,
-    scale:8+Math.random()*16,
+    scale:5+Math.random()*11,
     rot:Math.random()*Math.PI,
     phase:Math.random()*Math.PI*2
   });
@@ -331,35 +331,36 @@ function createNearWisps(count=34){
       if(it.pos.x<minX){it.pos.x=maxX;it.pos.y=-10+Math.random()*28;it.pos.z=-22-Math.random()*62;}
       dummy.position.set(camera.position.x*.45+it.pos.x,it.pos.y,it.pos.z);
       dummy.quaternion.copy(camera.quaternion);dummy.rotateZ(it.rot);
-      dummy.scale.set(it.scale*2.4,it.scale*.42,1);
+      dummy.scale.set(it.scale*2.1,it.scale*.34,1);
       dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
     }
     mesh.instanceMatrix.needsUpdate=true;
   }
   update(0,0);return {root,update};
 }
-function createStormCloudCeiling(count=30){
+function createStormCloudCeiling(count=18){
   const root=new THREE.Group();
-  const tex=makeEllipseTexture('142,154,166',.6,220,58);
+  const tex=makeEllipseTexture('118,132,146',.66,260,64);
   const geo=new THREE.PlaneGeometry(1,1);
   const clouds=[];
   for(let i=0;i<count;i++){
-    const topLayer=i<count*.42;
+    const topLayer=i<count*.48;
     const mat=new THREE.MeshBasicMaterial({
       map:tex,
-      color:topLayer?0x263241:0x465667,
+      color:topLayer?0x1d2937:0x3f5062,
       transparent:true,
-      opacity:topLayer ? .19 : .13,
+      opacity:topLayer ? .16 : .1,
       depthWrite:false,
       fog:false
     });
     const m=new THREE.Mesh(geo,mat);m.frustumCulled=false;root.add(m);
+    const mass=i%5;
     clouds.push({
       mesh:m,
-      base:new THREE.Vector3((Math.random()-.5)*620,topLayer?34+Math.random()*24:24+Math.random()*18,-92-Math.random()*320),
-      sx:42+Math.random()*86,
-      sy:7+Math.random()*15,
-      speed:(topLayer ? .55 : .28)*(Math.random()<.5?-1:1),
+      base:new THREE.Vector3((mass-2)*120+(Math.random()-.5)*58,topLayer?37+Math.random()*20:26+Math.random()*13,-105-Math.random()*300),
+      sx:(topLayer?76:62)+Math.random()*86,
+      sy:(topLayer?10:8)+Math.random()*12,
+      speed:(topLayer ? .32 : .18)*(Math.random()<.5?-1:1),
       phase:Math.random()*Math.PI*2,
       parallax:topLayer ? .07 : .1
     });
@@ -382,10 +383,10 @@ function createHazeBands(){
   const tex=makeEllipseTexture('178,188,193',.55,260,52);
   const geo=new THREE.PlaneGeometry(1,1);
   const bands=[
-    {z:-390,y:-35,scale:[520,22],opacity:.09,color:0xb3bcc0,parallax:.05,speed:.16,phase:.2},
-    {z:-295,y:-38,scale:[480,18],opacity:.13,color:0x9da9af,parallax:.08,speed:-.1,phase:1.8},
-    {z:-210,y:-41,scale:[410,16],opacity:.16,color:0x87949c,parallax:.12,speed:.12,phase:3.4},
-    {z:-145,y:-43,scale:[360,13],opacity:.1,color:0xb8b0a8,parallax:.16,speed:-.18,phase:4.5}
+    {z:-390,y:-34,scale:[460,18],opacity:.055,color:0xa8b3b8,parallax:.05,speed:.12,phase:.2},
+    {z:-295,y:-36.5,scale:[430,15],opacity:.075,color:0x929fa8,parallax:.08,speed:-.08,phase:1.8},
+    {z:-210,y:-40,scale:[370,13],opacity:.095,color:0x7e8c96,parallax:.12,speed:.09,phase:3.4},
+    {z:-145,y:-42.5,scale:[300,10],opacity:.06,color:0xa79f9a,parallax:.16,speed:-.12,phase:4.5}
   ].map(b=>{
     const mat=new THREE.MeshBasicMaterial({map:tex,color:b.color,transparent:true,opacity:b.opacity,depthWrite:false,fog:false});
     const m=new THREE.Mesh(geo,mat);m.frustumCulled=false;root.add(m);return {...b,mesh:m,offset:0};
@@ -404,10 +405,15 @@ function createDistantTerrain(){
   const ridges=[];
   function ridgeY(x,band,span){
     const n=x/span+.5;
-    return band.base+
+    let y=band.base+
       Math.sin(n*Math.PI*2*band.freqA+band.phase)*band.ampA+
       Math.sin(n*Math.PI*2*band.freqB+band.phase*.63)*band.ampB+
       Math.sin(n*Math.PI*2*band.freqC+band.phase*1.7)*band.ampC;
+    for(const p of band.peaks||[]){
+      const d=Math.abs(x-p.x),k=THREE.MathUtils.clamp(1-d/p.w,0,1);
+      y+=Math.sin(k*Math.PI*.5)*p.h;
+    }
+    return y;
   }
   function makeRidgeBand(band){
     const verts=[],colors=[],indices=[],base=new THREE.Color(band.color),topTint=new THREE.Color(band.topTint);
@@ -415,9 +421,10 @@ function createDistantTerrain(){
     for(let i=0;i<=segments;i++){
       const u=i/segments,x=(u-.5)*span,y=ridgeY(x,band,span);
       verts.push(x,bottom,band.z,x,y,band.z);
+      const contrast=band.contrast||1;
       const shade=.88+Math.sin(u*Math.PI*2+band.phase)*.04;
-      const low=base.clone().multiplyScalar(shade*.76);
-      const high=base.clone().lerp(topTint,.22).multiplyScalar(shade*(1.02+band.light*.08));
+      const low=base.clone().multiplyScalar(shade*(.76-(contrast-1)*.08));
+      const high=base.clone().lerp(topTint,.2).multiplyScalar(shade*(1.02+band.light*.08+(contrast-1)*.04));
       colors.push(low.r,low.g,low.b,high.r,high.g,high.b);
       if(i<segments){
         const a=i*2,b=a+1,c=a+2,d=a+3;
@@ -433,10 +440,10 @@ function createDistantTerrain(){
     ridges.push({mesh,band});
   }
   [
-    {z:-430,span:900,bottom:-260,base:-34,segments:112,color:0x9eacb7,topTint:0xd7dde0,opacity:.15,ampA:3.2,ampB:1.8,ampC:.9,freqA:2.2,freqB:5.4,freqC:11.5,phase:.8,light:.35,parallax:.055,drift:.035},
-    {z:-330,span:820,bottom:-260,base:-36,segments:108,color:0x748596,topTint:0xbec8d0,opacity:.22,ampA:4.2,ampB:2.4,ampC:1.15,freqA:2.6,freqB:6.8,freqC:13,phase:2.1,light:.22,parallax:.08,drift:.045},
-    {z:-240,span:720,bottom:-260,base:-38.5,segments:104,color:0x536678,topTint:0x91a0ac,opacity:.32,ampA:5.3,ampB:2.8,ampC:1.4,freqA:2.9,freqB:7.2,freqC:15.5,phase:4.4,light:.13,parallax:.115,drift:.06},
-    {z:-170,span:640,bottom:-260,base:-40.5,segments:98,color:0x384a5c,topTint:0x738493,opacity:.38,ampA:4.4,ampB:2.3,ampC:1.2,freqA:2.1,freqB:6.2,freqC:14.2,phase:5.7,light:.08,parallax:.155,drift:.075}
+    {z:-430,span:900,bottom:-260,base:-31.5,segments:112,color:0x8f9eab,topTint:0xc5cdd3,opacity:.18,ampA:3.4,ampB:1.8,ampC:.9,freqA:2.2,freqB:5.4,freqC:11.5,phase:.8,light:.32,parallax:.055,drift:.035,peaks:[{x:-310,w:105,h:4.8},{x:265,w:130,h:4.2}]},
+    {z:-330,span:820,bottom:-260,base:-33.2,segments:108,color:0x66798c,topTint:0xabb8c2,opacity:.26,ampA:4.5,ampB:2.45,ampC:1.15,freqA:2.6,freqB:6.8,freqC:13,phase:2.1,light:.2,parallax:.08,drift:.045,peaks:[{x:-230,w:92,h:7.2},{x:215,w:112,h:6.4}]},
+    {z:-240,span:720,bottom:-260,base:-37.2,segments:104,color:0x4b6072,topTint:0x8495a1,opacity:.35,ampA:5.2,ampB:2.75,ampC:1.4,freqA:2.9,freqB:7.2,freqC:15.5,phase:4.4,light:.12,parallax:.115,drift:.06,peaks:[{x:-175,w:86,h:4.8},{x:295,w:96,h:4.4}]},
+    {z:-170,span:640,bottom:-260,base:-40.2,segments:98,color:0x2f4355,topTint:0x697c8c,opacity:.46,ampA:4.6,ampB:2.35,ampC:1.2,freqA:2.1,freqB:6.2,freqC:14.2,phase:5.7,light:.08,parallax:.155,drift:.075,contrast:1.18,peaks:[{x:-250,w:76,h:3.5},{x:230,w:82,h:3.2}]}
   ].forEach(makeRidgeBand);
   root.userData.update=(dt,t)=>{
     for(const r of ridges){
@@ -448,12 +455,12 @@ function createDistantTerrain(){
 function createGroundHints(){
   const root=new THREE.Group(),dummy=new THREE.Object3D();
   const geo=new THREE.CircleGeometry(1,12);
-  const mat=new THREE.MeshBasicMaterial({color:0x1c2129,transparent:true,opacity:.055,depthWrite:false});
-  const mesh=new THREE.InstancedMesh(geo,mat,18);mesh.frustumCulled=false;root.add(mesh);
-  for(let i=0;i<18;i++){
-    dummy.position.set((Math.random()-.5)*320,-55,-165-Math.random()*270);
+  const mat=new THREE.MeshBasicMaterial({color:0x1c2129,transparent:true,opacity:.022,depthWrite:false});
+  const mesh=new THREE.InstancedMesh(geo,mat,12);mesh.frustumCulled=false;root.add(mesh);
+  for(let i=0;i<12;i++){
+    dummy.position.set((Math.random()-.5)*300,-63,-245-Math.random()*250);
     dummy.rotation.set(-Math.PI/2,0,Math.random()*Math.PI);
-    dummy.scale.set(10+Math.random()*30,4+Math.random()*13,1);
+    dummy.scale.set(8+Math.random()*22,3+Math.random()*9,1);
     dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
   }
   mesh.instanceMatrix.needsUpdate=true;
@@ -463,9 +470,9 @@ function createSmokeColumns(){
   const root=new THREE.Group(),dummy=new THREE.Object3D(),items=[],columns=6,puffs=7,fireItems=[];
   const geo=new THREE.DodecahedronGeometry(1,1);
   const tiers=[
-    {count:columns*3,opacity:.2,mesh:null,next:0},
-    {count:columns*3,opacity:.13,mesh:null,next:0},
-    {count:columns*2,opacity:.07,mesh:null,next:0}
+    {count:columns*3,opacity:.24,mesh:null,next:0},
+    {count:columns*3,opacity:.11,mesh:null,next:0},
+    {count:columns*2,opacity:.045,mesh:null,next:0}
   ];
   tiers.forEach(t=>{
     const mat=new THREE.MeshBasicMaterial({color:0xffffff,vertexColors:true,transparent:true,opacity:t.opacity,depthWrite:false,fog:true});
@@ -474,7 +481,7 @@ function createSmokeColumns(){
   const fireGeo=new THREE.SphereGeometry(1,8,5);
   const fireMat=new THREE.MeshBasicMaterial({color:0xff7430,transparent:true,opacity:.28,depthWrite:false,blending:THREE.AdditiveBlending,fog:false});
   const fireMesh=new THREE.InstancedMesh(fireGeo,fireMat,columns);fireMesh.frustumCulled=false;root.add(fireMesh);
-  const bottomColor=new THREE.Color(0x1d232b),topColor=new THREE.Color(0x7e8990);
+  const bottomColor=new THREE.Color(0x111820),topColor=new THREE.Color(0x87939a);
   for(let c=0;c<columns;c++){
     const base=new THREE.Vector3((Math.random()-.5)*280,-43,-155-Math.random()*150),lean=(Math.random()-.5)*1.15;
     fireItems.push({base,index:c,phase:Math.random()*Math.PI*2,show:Math.random()<.68});
@@ -610,11 +617,11 @@ function createSunSprites(){
 function createFocalGlow(){
   const root=new THREE.Group();
   const tex=makeSoftTexture('218,235,245',.32,128,.7);
-  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,opacity:.28,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));
-  glow.scale.set(54,28,1);root.add(glow);
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,opacity:.18,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));
+  glow.scale.set(42,22,1);root.add(glow);
   function update(dt,t){
     glow.position.set(player.group.position.x*.34,player.group.position.y*.16+7,-72);
-    glow.material.opacity=.22+Math.sin(t*.8)*.025;
+    glow.material.opacity=.15+Math.sin(t*.8)*.018;
   }
   return {root,update};
 }

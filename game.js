@@ -215,6 +215,11 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(500,32,16),skyMat);sky.visible
 
 // Environment / atmosphere: image-driven cinematic parallax backdrop plus lightweight distant activity.
 let parallaxBackdrop=null;
+const backdropDebug={
+  showImageMountains:false,
+  showSunCeiling:false,
+  showSoftProceduralMountains:true
+};
 const backdropTextureLoader=new THREE.TextureLoader();
 function cleanBackdropTextureAlpha(texture,path){
   const img=texture.image;
@@ -296,17 +301,67 @@ function makeBackdropLayer({
   };
   return mesh;
 }
+function createSoftMountainSilhouetteLayer({
+  width=620,bottom=-128,ridgeY=-62,amplitude=8,opacity=.24,color=0x6f8492,
+  renderOrder=2,parallax=.018,x=0,y=0,z=0,seed=1
+}={}){
+  const shape=new THREE.Shape();
+  const points=[];
+  const segments=42;
+  const phase=seed*12.9898;
+  shape.moveTo(-width*.5,bottom);
+  for(let i=0;i<=segments;i++){
+    const t=i/segments;
+    const px=THREE.MathUtils.lerp(-width*.5,width*.5,t);
+    const broad=Math.sin(t*Math.PI*2+phase)*.45+Math.sin(t*Math.PI*4.7+phase*.37)*.24;
+    const fine=Math.sin(t*Math.PI*13.5+phase*.71)*.08;
+    const shoulder=-Math.pow(Math.abs(t-.52)*2,2)*amplitude*.18;
+    const py=ridgeY+(broad+fine)*amplitude+shoulder;
+    points.push(new THREE.Vector2(px,py));
+  }
+  points.forEach((p,i)=>i===0?shape.lineTo(p.x,p.y):shape.lineTo(p.x,p.y));
+  shape.lineTo(width*.5,bottom);
+  shape.lineTo(-width*.5,bottom);
+  const mesh=new THREE.Mesh(
+    new THREE.ShapeGeometry(shape),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent:true,
+      opacity,
+      depthWrite:false,
+      depthTest:true,
+      fog:false,
+      side:THREE.DoubleSide
+    })
+  );
+  mesh.position.set(x,y,z);
+  mesh.renderOrder=renderOrder;
+  mesh.frustumCulled=false;
+  mesh.userData.backdrop={baseX:x,baseY:y,baseZ:z,baseOpacity:opacity,parallax,driftSpeed:0,drift:0};
+  return mesh;
+}
 function createParallaxBackdrop(){
   const root=new THREE.Group();
   root.renderOrder=-100;
   scene.add(root);
   const layers=[
-    makeBackdropLayer({path:'image/sky_base_gradient_L0.png',width:558,height:260,opacity:1,renderOrder:0,parallax:.002,transparent:false,color:0xc3d0d8}),
-    makeBackdropLayer({path:'image/sky_sun_ceiling_L1.png',width:558,height:260,opacity:.46,renderOrder:1,parallax:.004,color:0xaebfca}),
-    makeBackdropLayer({path:'image/far_mountains_L2.png',width:520,height:168,y:-68,opacity:.46,renderOrder:2,parallax:.012,keyGreen:true,alphaCutoff:.055,color:0x9fb1bd}),
-    makeBackdropLayer({path:'image/god_ray_overlay_L3.png',width:558,height:260,opacity:.20,renderOrder:3,parallax:.004,blending:THREE.AdditiveBlending,color:0xf5d29b}),
-    makeBackdropLayer({path:'image/fog_sheet_01_L6.png',width:640,height:300,y:-42,opacity:.20,renderOrder:5,parallax:.02,driftSpeed:.12,alphaCutoff:.01,color:0xb8c7cf})
+    makeBackdropLayer({path:'image/sky_base_gradient_L0.png',width:558,height:260,opacity:1,renderOrder:0,parallax:.002,transparent:false,color:0xa9bcc8}),
+    makeBackdropLayer({path:'image/god_ray_overlay_L3.png',width:558,height:260,opacity:.17,renderOrder:3,parallax:.004,blending:THREE.AdditiveBlending,color:0xe7d2ad}),
+    makeBackdropLayer({path:'image/fog_sheet_01_L6.png',width:640,height:300,y:-42,opacity:.18,renderOrder:5,parallax:.02,driftSpeed:.12,alphaCutoff:.01,color:0xaebdc6})
   ];
+  if(backdropDebug.showSunCeiling){
+    layers.splice(1,0,makeBackdropLayer({path:'image/sky_sun_ceiling_L1.png',width:558,height:260,opacity:.36,renderOrder:1,parallax:.004,color:0xaebfca}));
+  }
+  if(backdropDebug.showImageMountains){
+    layers.splice(2,0,makeBackdropLayer({path:'image/far_mountains_L2.png',width:520,height:168,y:-68,opacity:.38,renderOrder:2,parallax:.012,keyGreen:true,alphaCutoff:.065,color:0x9fb1bd}));
+  }
+  if(backdropDebug.showSoftProceduralMountains){
+    layers.splice(1,0,
+      createSoftMountainSilhouetteLayer({width:650,bottom:-130,ridgeY:-76,amplitude:7,opacity:.18,color:0x8ca0aa,renderOrder:1.6,parallax:.01,seed:2}),
+      createSoftMountainSilhouetteLayer({width:635,bottom:-132,ridgeY:-88,amplitude:9,opacity:.26,color:0x617583,renderOrder:2.1,parallax:.018,seed:5}),
+      createSoftMountainSilhouetteLayer({width:620,bottom:-134,ridgeY:-100,amplitude:7,opacity:.30,color:0x4c6070,renderOrder:2.6,parallax:.026,seed:9})
+    );
+  }
   layers.forEach(layer=>root.add(layer));
 
   const smokeSprites=[];
@@ -333,9 +388,9 @@ function updateParallaxBackdrop(dt,elapsed){
     layer.position.y=data.baseY-motionY*data.parallax*.35;
     layer.position.z=data.baseZ;
     if(layer.renderOrder===3){
-      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.4)*.018,.18,.30);
+      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.4)*.012,.16,.24);
     }else if(layer.renderOrder===5){
-      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.23)*.015,.18,.28);
+      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.23)*.012,.16,.24);
     }
   }
   for(const sprite of smokeSprites){

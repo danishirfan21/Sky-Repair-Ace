@@ -131,7 +131,7 @@ function createAudioManager(paths){
     startLoop('wind_loop',.12);
     startLoop('distant_battle_loop',.08);
     stopLoop('music_base_loop');
-    startLoop('music_elevenlabs_loop',.32);
+    startLoop('music_elevenlabs_loop',musicVolumeConfig.gameplay);
     startLoop('engine_damaged_loop',0);
   }
   return {play,playRandom:(names,volume=1)=>play(names[Math.floor(Math.random()*names.length)],volume),startLoop,stopLoop,setLoopVolume,fadeLoop,unlock,get unlocked(){return unlocked;}};
@@ -165,7 +165,12 @@ const audio=createAudioManager({
   mg_overdrive_loop:'audio/weapons/mg_overdrive_loop.mp3'
 });
 const audioTimers={shot:0,enemyShot:0,hitConfirm:0,hitMetal:0,repairTick:0,criticalBeep:0};
-const audioMix={damagedEngine:0,music:.32};
+const musicVolumeConfig={
+  gameplay:0.55,
+  critical:0.68,
+  gameOver:0.28
+};
+const audioMix={damagedEngine:0,music:musicVolumeConfig.gameplay};
 const hitSounds=['hit_metal_01','hit_metal_02'];
 const whizSounds=['bullet_whiz_01','bullet_whiz_02'];
 function updateAudioMix(dt){
@@ -173,7 +178,7 @@ function updateAudioMix(dt){
   const damageTarget=player.alive&&player.hp<45?.05+(45-player.hp)/45*.15:0;
   audioMix.damagedEngine=THREE.MathUtils.lerp(audioMix.damagedEngine,damageTarget,Math.min(1,dt*2.5));
   audio.setLoopVolume('engine_damaged_loop',audioMix.damagedEngine);
-  const musicTarget=player.alive&&player.hp<30?.38:player.alive?.32:.18;
+  const musicTarget=player.alive&&player.hp<30?musicVolumeConfig.critical:player.alive?musicVolumeConfig.gameplay:musicVolumeConfig.gameOver;
   audioMix.music=THREE.MathUtils.lerp(audioMix.music,musicTarget,Math.min(1,dt*1.4));
   audio.setLoopVolume('music_elevenlabs_loop',audioMix.music);
   const now=performance.now()/1000;
@@ -1178,7 +1183,7 @@ function endGame(){
   audio.fadeLoop('wind_loop',0,.75,true);
   audio.fadeLoop('distant_battle_loop',.02,.75);
   audio.stopLoop('music_base_loop');
-  audio.setLoopVolume('music_elevenlabs_loop',.18);
+  audio.setLoopVolume('music_elevenlabs_loop',musicVolumeConfig.gameOver);
   releaseMouseCapture();
   if(ui.finalTime)ui.finalTime.textContent=player.survival.toFixed(1)+'s';
   if(ui.finalKills)ui.finalKills.textContent=player.kills;
@@ -1195,13 +1200,13 @@ function resetGame(){
   audioTimers.criticalBeep=0;
   audioTimers.enemyShot=0;
   audioMix.damagedEngine=0;
-  audioMix.music=.32;
+  audioMix.music=musicVolumeConfig.gameplay;
   if(audio.unlocked){
     audio.startLoop('engine_loop',.25);
     audio.startLoop('wind_loop',.12);
     audio.startLoop('distant_battle_loop',.08);
     audio.stopLoop('music_base_loop');
-    audio.startLoop('music_elevenlabs_loop',.32);
+    audio.startLoop('music_elevenlabs_loop',musicVolumeConfig.gameplay);
     audio.startLoop('engine_damaged_loop',0);
   }
   bullets.splice(0).forEach(b=>scene.remove(b.mesh));

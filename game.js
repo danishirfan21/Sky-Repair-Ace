@@ -1,7 +1,7 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0xa5b7c4,.0036);
+scene.fog=new THREE.FogExp2(0x8293a2,.0041);
 const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,1000);
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -198,16 +198,18 @@ const skyFrag=`
 varying vec3 vP;uniform float shift;uniform float uTime;uniform float glare;
 void main(){
   vec3 d=normalize(vP);float h=d.y*.5+.5;
-  vec3 horizon=mix(vec3(.78,.86,.9),vec3(.62,.71,.78),shift*.35);
-  vec3 mid=mix(vec3(.46,.65,.82),vec3(.35,.5,.66),shift*.36);
-  vec3 top=mix(vec3(.1,.28,.52),vec3(.08,.16,.34),shift*.34);
-  vec3 sky=mix(horizon,mid,smoothstep(.06,.48,h));
-  sky=mix(sky,top,smoothstep(.42,1.,h));
-  float haze=1.-smoothstep(.05,.36,h);
-  sky=mix(sky,vec3(.88,.9,.86),haze*(.16+shift*.07));
+  vec3 horizon=mix(vec3(.54,.63,.69),vec3(.46,.55,.62),shift*.28);
+  vec3 mid=mix(vec3(.31,.44,.56),vec3(.25,.36,.48),shift*.32);
+  vec3 top=mix(vec3(.08,.15,.25),vec3(.05,.1,.19),shift*.4);
+  vec3 sky=mix(horizon,mid,smoothstep(.04,.5,h));
+  sky=mix(sky,top,smoothstep(.39,1.,h));
+  float haze=1.-smoothstep(.03,.35,h);
+  sky=mix(sky,vec3(.62,.68,.69),haze*(.11+shift*.045));
+  float storm=smoothstep(.58,1.,h);
+  sky=mix(sky,vec3(.04,.08,.15),storm*(.28+.045*sin(uTime*.04+d.x*5.)));
   vec3 sDir=normalize(vec3(-.56,.28,-.78));float sD=max(0.,dot(d,sDir));
-  sky+=vec3(1.,.58,.22)*pow(sD,72.)*(.32+glare*.3);
-  sky+=vec3(1.,.45,.18)*pow(sD,10.)*(.055+glare*.11);
+  sky+=vec3(1.,.58,.24)*pow(sD,72.)*(.24+glare*.24);
+  sky+=vec3(1.,.42,.17)*pow(sD,10.)*(.04+glare*.08);
   gl_FragColor=vec4(sky,1.);}`;
 const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,
   uniforms:{shift:{value:0},uTime:{value:0},glare:{value:0}},vertexShader:skyVert,fragmentShader:skyFrag});
@@ -232,6 +234,16 @@ function makeSoftTexture(color='210,220,225',alpha=.55,size=96,stretchY=1){
   grad.addColorStop(.42,`rgba(${color},${alpha*.48})`);
   grad.addColorStop(1,`rgba(${color},0)`);
   g.fillStyle=grad;g.fillRect(0,0,c.width,c.height);
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;return tex;
+}
+function makeEllipseTexture(color='160,170,178',alpha=.5,width=192,height=56){
+  const c=document.createElement('canvas');c.width=width;c.height=height;
+  const g=c.getContext('2d'),cx=width/2,cy=height/2,steps=34;
+  for(let i=steps;i>=1;i--){
+    const k=i/steps,a=alpha*Math.pow(1-k,.75);
+    g.fillStyle=`rgba(${color},${a})`;
+    g.beginPath();g.ellipse(cx,cy,width*.5*k,height*.5*k,0,0,Math.PI*2);g.fill();
+  }
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;return tex;
 }
 function litCloudColor(base,local,cloudScale,groupWarm,contrast){
@@ -326,91 +338,168 @@ function createNearWisps(count=34){
   }
   update(0,0);return {root,update};
 }
+function createStormCloudCeiling(count=30){
+  const root=new THREE.Group();
+  const tex=makeEllipseTexture('142,154,166',.6,220,58);
+  const geo=new THREE.PlaneGeometry(1,1);
+  const clouds=[];
+  for(let i=0;i<count;i++){
+    const topLayer=i<count*.42;
+    const mat=new THREE.MeshBasicMaterial({
+      map:tex,
+      color:topLayer?0x263241:0x465667,
+      transparent:true,
+      opacity:topLayer ? .19 : .13,
+      depthWrite:false,
+      fog:false
+    });
+    const m=new THREE.Mesh(geo,mat);m.frustumCulled=false;root.add(m);
+    clouds.push({
+      mesh:m,
+      base:new THREE.Vector3((Math.random()-.5)*620,topLayer?34+Math.random()*24:24+Math.random()*18,-92-Math.random()*320),
+      sx:42+Math.random()*86,
+      sy:7+Math.random()*15,
+      speed:(topLayer ? .55 : .28)*(Math.random()<.5?-1:1),
+      phase:Math.random()*Math.PI*2,
+      parallax:topLayer ? .07 : .1
+    });
+  }
+  function update(dt,t){
+    for(const c of clouds){
+      c.base.x+=c.speed*dt;
+      const limit=340;
+      if(c.base.x>limit)c.base.x=-limit;
+      if(c.base.x<-limit)c.base.x=limit;
+      c.mesh.position.set(camera.position.x*c.parallax+c.base.x,c.base.y+Math.sin(t*.07+c.phase)*1.4,c.base.z);
+      c.mesh.rotation.z=Math.sin(c.phase)*.08;
+      c.mesh.scale.set(c.sx*(1+Math.sin(t*.035+c.phase)*.025),c.sy,1);
+    }
+  }
+  update(0,0);return {root,update};
+}
+function createHazeBands(){
+  const root=new THREE.Group();
+  const tex=makeEllipseTexture('178,188,193',.55,260,52);
+  const geo=new THREE.PlaneGeometry(1,1);
+  const bands=[
+    {z:-390,y:-35,scale:[520,22],opacity:.09,color:0xb3bcc0,parallax:.05,speed:.16,phase:.2},
+    {z:-295,y:-38,scale:[480,18],opacity:.13,color:0x9da9af,parallax:.08,speed:-.1,phase:1.8},
+    {z:-210,y:-41,scale:[410,16],opacity:.16,color:0x87949c,parallax:.12,speed:.12,phase:3.4},
+    {z:-145,y:-43,scale:[360,13],opacity:.1,color:0xb8b0a8,parallax:.16,speed:-.18,phase:4.5}
+  ].map(b=>{
+    const mat=new THREE.MeshBasicMaterial({map:tex,color:b.color,transparent:true,opacity:b.opacity,depthWrite:false,fog:false});
+    const m=new THREE.Mesh(geo,mat);m.frustumCulled=false;root.add(m);return {...b,mesh:m,offset:0};
+  });
+  function update(dt,t){
+    for(const b of bands){
+      b.offset+=b.speed*dt;
+      b.mesh.position.set(camera.position.x*b.parallax+Math.sin(t*.06+b.phase)*4+b.offset,b.y,b.z);
+      b.mesh.scale.set(b.scale[0],b.scale[1]*(1+Math.sin(t*.09+b.phase)*.06),1);
+    }
+  }
+  update(0,0);return {root,update};
+}
 function createDistantTerrain(){
   const root=new THREE.Group();
-  function makeLitMountainGeometry(segmentCount,baseColor,warmth=.04,contrast=1){
-    const geo=new THREE.ConeGeometry(1,1,segmentCount,1).toNonIndexed();
-    const pos=geo.attributes.position,colors=[],base=new THREE.Color(baseColor);
-    for(let i=0;i<pos.count;i++){
-      const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
-      const top=THREE.MathUtils.clamp(y+.5,0,1);
-      const sunSide=THREE.MathUtils.clamp((-x*.82-z*.18)+.52,0,1);
-      const shadeSide=1.-sunSide;
-      const c=base.clone();
-      c.multiplyScalar(.76+top*.24*contrast+sunSide*.22*contrast-shadeSide*.08*contrast);
-      c.lerp(new THREE.Color(0xd8e6ee),top*.12+sunSide*.07);
-      c.lerp(new THREE.Color(0xffd8a8),sunSide*top*warmth);
-      c.lerp(new THREE.Color(0x26384d),shadeSide*(1.-top)*.08*contrast);
-      colors.push(c.r,c.g,c.b);
-    }
-    geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-    return geo;
+  const ridges=[];
+  function ridgeY(x,band,span){
+    const n=x/span+.5;
+    return band.base+
+      Math.sin(n*Math.PI*2*band.freqA+band.phase)*band.ampA+
+      Math.sin(n*Math.PI*2*band.freqB+band.phase*.63)*band.ampB+
+      Math.sin(n*Math.PI*2*band.freqC+band.phase*1.7)*band.ampC;
   }
-  const makeBand=({count,z,yBase,span,color,opacity,hRange,wRange,depth,segments,fog=true,warmth=.035,contrast=1})=>{
-    let x=-span*.5;
-    for(let i=0;i<count;i++){
-      x+=wRange[0]*.65+Math.random()*wRange[1]*.55;
-      if(x>span*.5)x-=span;
-      const h=hRange[0]+Math.random()*(hRange[1]-hRange[0]);
-      const w=wRange[0]+Math.random()*(wRange[1]-wRange[0]);
-      const base=new THREE.Color(color).offsetHSL((Math.random()-.5)*.018,(Math.random()-.5)*.035,(Math.random()-.5)*.04);
-      const mat=new THREE.MeshBasicMaterial({vertexColors:true,transparent:opacity<1,opacity,fog});
-      const m=new THREE.Mesh(makeLitMountainGeometry(segments[0]+Math.floor(Math.random()*(segments[1]-segments[0]+1)),base,warmth,contrast),mat);
-      m.position.set(x+(Math.random()-.5)*18,yBase+h*.5,z+(Math.random()-.5)*depth);
-      m.scale.set(w,h,w*(.26+Math.random()*.42));
-      m.rotation.set(0,(Math.random()-.5)*.85,(Math.random()-.5)*.08);
-      root.add(m);
+  function makeRidgeBand(band){
+    const verts=[],colors=[],indices=[],base=new THREE.Color(band.color),topTint=new THREE.Color(band.topTint);
+    const bottom=band.bottom,segments=band.segments,span=band.span;
+    for(let i=0;i<=segments;i++){
+      const u=i/segments,x=(u-.5)*span,y=ridgeY(x,band,span);
+      verts.push(x,bottom,band.z,x,y,band.z);
+      const shade=.88+Math.sin(u*Math.PI*2+band.phase)*.04;
+      const low=base.clone().multiplyScalar(shade*.76);
+      const high=base.clone().lerp(topTint,.22).multiplyScalar(shade*(1.02+band.light*.08));
+      colors.push(low.r,low.g,low.b,high.r,high.g,high.b);
+      if(i<segments){
+        const a=i*2,b=a+1,c=a+2,d=a+3;
+        indices.push(a,c,b,b,c,d);
+      }
+    }
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+    geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    geo.setIndex(indices);geo.computeVertexNormals();
+    const mat=new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:band.opacity,depthWrite:false,fog:true});
+    const mesh=new THREE.Mesh(geo,mat);mesh.frustumCulled=false;root.add(mesh);
+    ridges.push({mesh,band});
+  }
+  [
+    {z:-430,span:900,bottom:-260,base:-34,segments:112,color:0x9eacb7,topTint:0xd7dde0,opacity:.15,ampA:3.2,ampB:1.8,ampC:.9,freqA:2.2,freqB:5.4,freqC:11.5,phase:.8,light:.35,parallax:.055,drift:.035},
+    {z:-330,span:820,bottom:-260,base:-36,segments:108,color:0x748596,topTint:0xbec8d0,opacity:.22,ampA:4.2,ampB:2.4,ampC:1.15,freqA:2.6,freqB:6.8,freqC:13,phase:2.1,light:.22,parallax:.08,drift:.045},
+    {z:-240,span:720,bottom:-260,base:-38.5,segments:104,color:0x536678,topTint:0x91a0ac,opacity:.32,ampA:5.3,ampB:2.8,ampC:1.4,freqA:2.9,freqB:7.2,freqC:15.5,phase:4.4,light:.13,parallax:.115,drift:.06},
+    {z:-170,span:640,bottom:-260,base:-40.5,segments:98,color:0x384a5c,topTint:0x738493,opacity:.38,ampA:4.4,ampB:2.3,ampC:1.2,freqA:2.1,freqB:6.2,freqC:14.2,phase:5.7,light:.08,parallax:.155,drift:.075}
+  ].forEach(makeRidgeBand);
+  root.userData.update=(dt,t)=>{
+    for(const r of ridges){
+      r.mesh.position.x=camera.position.x*r.band.parallax+Math.sin(t*r.band.drift+r.band.phase)*2.4;
     }
   };
-  makeBand({count:20,z:-425,yBase:-45,span:640,color:0xd0dbe3,opacity:.22,hRange:[13,31],wRange:[18,42],depth:50,segments:[4,7],warmth:.025,contrast:.65});
-  makeBand({count:20,z:-288,yBase:-47,span:525,color:0x7d8fa2,opacity:.64,hRange:[24,55],wRange:[22,58],depth:40,segments:[4,6],warmth:.035,contrast:.88});
-  makeBand({count:16,z:-158,yBase:-49,span:430,color:0x3f5369,opacity:1,hRange:[36,80],wRange:[32,76],depth:30,segments:[3,5],fog:false,warmth:.045,contrast:1.05});
   return root;
 }
 function createGroundHints(){
   const root=new THREE.Group(),dummy=new THREE.Object3D();
   const geo=new THREE.CircleGeometry(1,12);
-  const mat=new THREE.MeshBasicMaterial({color:0x1c2129,transparent:true,opacity:.12,depthWrite:false});
+  const mat=new THREE.MeshBasicMaterial({color:0x1c2129,transparent:true,opacity:.055,depthWrite:false});
   const mesh=new THREE.InstancedMesh(geo,mat,18);mesh.frustumCulled=false;root.add(mesh);
   for(let i=0;i<18;i++){
-    dummy.position.set((Math.random()-.5)*320,-48.8,-95-Math.random()*260);
+    dummy.position.set((Math.random()-.5)*320,-55,-165-Math.random()*270);
     dummy.rotation.set(-Math.PI/2,0,Math.random()*Math.PI);
-    dummy.scale.set(14+Math.random()*42,5+Math.random()*18,1);
+    dummy.scale.set(10+Math.random()*30,4+Math.random()*13,1);
     dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
   }
   mesh.instanceMatrix.needsUpdate=true;
   return root;
 }
 function createSmokeColumns(){
-  const root=new THREE.Group(),dummy=new THREE.Object3D(),items=[],columns=10,puffs=8;
+  const root=new THREE.Group(),dummy=new THREE.Object3D(),items=[],columns=6,puffs=7,fireItems=[];
   const geo=new THREE.DodecahedronGeometry(1,1);
   const tiers=[
-    {count:columns*3,opacity:.56,mesh:null,next:0},
-    {count:columns*3,opacity:.38,mesh:null,next:0},
-    {count:columns*2,opacity:.2,mesh:null,next:0}
+    {count:columns*3,opacity:.2,mesh:null,next:0},
+    {count:columns*3,opacity:.13,mesh:null,next:0},
+    {count:columns*2,opacity:.07,mesh:null,next:0}
   ];
   tiers.forEach(t=>{
-    const mat=new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,transparent:true,opacity:t.opacity,depthWrite:false});
+    const mat=new THREE.MeshBasicMaterial({color:0xffffff,vertexColors:true,transparent:true,opacity:t.opacity,depthWrite:false,fog:true});
     t.mesh=new THREE.InstancedMesh(geo,mat,t.count);t.mesh.frustumCulled=false;root.add(t.mesh);
   });
-  const bottomColor=new THREE.Color(0x242a32),topColor=new THREE.Color(0x9ca7ad);
+  const fireGeo=new THREE.SphereGeometry(1,8,5);
+  const fireMat=new THREE.MeshBasicMaterial({color:0xff7430,transparent:true,opacity:.28,depthWrite:false,blending:THREE.AdditiveBlending,fog:false});
+  const fireMesh=new THREE.InstancedMesh(fireGeo,fireMat,columns);fireMesh.frustumCulled=false;root.add(fireMesh);
+  const bottomColor=new THREE.Color(0x1d232b),topColor=new THREE.Color(0x7e8990);
   for(let c=0;c<columns;c++){
-    const base=new THREE.Vector3((Math.random()-.5)*300,-38,-105-Math.random()*225),lean=(Math.random()-.5)*1.8;
+    const base=new THREE.Vector3((Math.random()-.5)*280,-43,-155-Math.random()*150),lean=(Math.random()-.5)*1.15;
+    fireItems.push({base,index:c,phase:Math.random()*Math.PI*2,show:Math.random()<.68});
     for(let p=0;p<puffs;p++){
       const k=p/(puffs-1),tierIndex=p<3?0:p<6?1:2,tier=tiers[tierIndex];
-      const item={base,p,k,lean,tier:tierIndex,index:tier.next++,phase:Math.random()*Math.PI*2,scale:2.2+p*.85+Math.random()*1.8};
+      const item={base,p,k,lean,tier:tierIndex,index:tier.next++,phase:Math.random()*Math.PI*2,scale:.9+p*.48+Math.random()*.9};
       items.push(item);tier.mesh.setColorAt(item.index,bottomColor.clone().lerp(topColor,k).multiplyScalar(.86+k*.24));
     }
   }
   function update(dt,t){
     for(let i=0;i<items.length;i++){
-      const it=items[i],rise=it.p*4.3,drift=Math.sin(t*.18+it.phase)*(1.4+it.p*.42)+it.lean*it.p;
-      dummy.position.set(it.base.x+drift,it.base.y+rise,it.base.z+Math.cos(t*.15+it.phase)*1.2+it.p*.18);
+      const it=items[i],rise=it.p*3.25,drift=Math.sin(t*.14+it.phase)*(.8+it.p*.28)+it.lean*it.p;
+      dummy.position.set(camera.position.x*.08+it.base.x+drift,it.base.y+rise,it.base.z+Math.cos(t*.12+it.phase)*.7+it.p*.12);
       const s=it.scale*(1+Math.sin(t*.23+it.phase)*.08);
       dummy.scale.set(s*(1.15+it.k*.55),s*(1.1+it.k*.28),s*(.95+it.k*.35));dummy.rotation.set(t*.02+it.phase,it.phase,t*.03);
       dummy.updateMatrix();tiers[it.tier].mesh.setMatrixAt(it.index,dummy.matrix);
     }
+    for(const f of fireItems){
+      const flicker=f.show?(.55+Math.sin(t*5.5+f.phase)*.18+Math.random()*.08):0;
+      dummy.position.set(camera.position.x*.08+f.base.x,f.base.y+.4,f.base.z+.8);
+      dummy.scale.set(1.2*flicker,.42*flicker,1.2*flicker);
+      dummy.updateMatrix();fireMesh.setMatrixAt(f.index,dummy.matrix);
+    }
     tiers.forEach(tier=>tier.mesh.instanceMatrix.needsUpdate=true);
+    fireMesh.instanceMatrix.needsUpdate=true;
   }
   tiers.forEach(tier=>{if(tier.mesh.instanceColor)tier.mesh.instanceColor.needsUpdate=true;});
   update(0,0);return {root,update};
@@ -441,26 +530,69 @@ function createDistantPlanes(){
 }
 function createBattlefieldActivity(){
   const root=new THREE.Group();
-  const mat=new THREE.MeshBasicMaterial({color:0xff9a3a,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false});
-  const coreGeo=new THREE.SphereGeometry(1,8,6);
-  const flashes=[];
+  const flashMat=new THREE.MeshBasicMaterial({color:0xff9a3a,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false});
+  const flashGeo=new THREE.SphereGeometry(1,8,6);
+  const flakGeo=new THREE.DodecahedronGeometry(1,1);
+  const tracerGeo=new THREE.CylinderGeometry(.025,.035,1,6);
+  const flashes=[],flak=[],tracers=[];
+  for(let i=0;i<6;i++){
+    const core=new THREE.Mesh(flashGeo,flashMat.clone());core.visible=false;root.add(core);
+    flashes.push({mesh:core,life:0,max:.1,next:Math.random()*3.6,baseScale:1});
+  }
+  for(let i=0;i<8;i++){
+    const puff=new THREE.Mesh(flakGeo,new THREE.MeshBasicMaterial({color:0x111820,transparent:true,opacity:0,depthWrite:false,fog:true}));
+    puff.visible=false;root.add(puff);
+    flak.push({mesh:puff,life:0,max:.8,next:1+Math.random()*5,baseScale:1,phase:Math.random()*Math.PI*2});
+  }
   for(let i=0;i<10;i++){
-    const core=new THREE.Mesh(coreGeo,mat.clone());core.visible=false;root.add(core);
-    flashes.push({mesh:core,life:0,max:.1,next:Math.random()*2.8,baseScale:1});
+    const tracer=new THREE.Mesh(tracerGeo,new THREE.MeshBasicMaterial({color:0xffa34a,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));
+    tracer.visible=false;root.add(tracer);
+    tracers.push({mesh:tracer,life:0,max:.38,next:Math.random()*4,vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2});
   }
   function trigger(f){
-    f.life=f.max=.1+Math.random()*.18;f.next=1.2+Math.random()*4.4;f.baseScale=.45+Math.random()*.95;
-    f.mesh.position.set((Math.random()-.5)*270,-34+Math.random()*18,-115-Math.random()*250);
+    f.life=f.max=.12+Math.random()*.2;f.next=2+Math.random()*5.2;f.baseScale=.22+Math.random()*.42;
+    f.mesh.position.set(camera.position.x*.08+(Math.random()-.5)*260,-43+Math.random()*10,-165-Math.random()*150);
     f.mesh.scale.setScalar(f.baseScale);f.mesh.visible=true;
+  }
+  function triggerFlak(f){
+    f.life=f.max=.7+Math.random()*.45;f.next=2.6+Math.random()*6.2;f.baseScale=.55+Math.random()*1.25;
+    f.mesh.position.set(camera.position.x*.08+(Math.random()-.5)*190,5+Math.random()*30,-125-Math.random()*160);
+    f.mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    f.mesh.visible=true;
+  }
+  function triggerTracer(tr){
+    tr.life=tr.max=.28+Math.random()*.18;tr.next=1.8+Math.random()*5.8;
+    tr.mesh.position.set(camera.position.x*.08+(Math.random()-.5)*230,-22+Math.random()*34,-135-Math.random()*170);
+    tr.mesh.rotation.set(Math.PI/2,(Math.random()-.5)*.35,Math.PI/2+(Math.random()-.5)*.55);
+    tr.mesh.scale.set(1,5+Math.random()*7,1);
+    tr.vel.set((Math.random()<.5?-1:1)*(5+Math.random()*8),1+Math.random()*3,0);
+    tr.mesh.visible=true;
   }
   function update(dt,t){
     for(const f of flashes){
       if(f.life>0){
         f.life-=dt;const k=Math.max(0,f.life/f.max);
-        f.mesh.material.opacity=Math.sin(k*Math.PI)*.55;
-        f.mesh.scale.setScalar(f.baseScale*(1+(1-k)*.8));
+        f.mesh.material.opacity=Math.sin(k*Math.PI)*.28;
+        f.mesh.scale.setScalar(f.baseScale*(1+(1-k)*.6));
         if(f.life<=0)f.mesh.visible=false;
       }else{f.next-=dt;if(f.next<=0)trigger(f);}
+    }
+    for(const f of flak){
+      if(f.life>0){
+        f.life-=dt;const k=Math.max(0,f.life/f.max);
+        f.mesh.material.opacity=.2*k;
+        f.mesh.scale.setScalar(f.baseScale*(1+(1-k)*1.4));
+        f.mesh.position.x+=Math.sin(t*.7+f.phase)*dt*.55;
+        if(f.life<=0)f.mesh.visible=false;
+      }else{f.next-=dt;if(f.next<=0)triggerFlak(f);}
+    }
+    for(const tr of tracers){
+      if(tr.life>0){
+        tr.life-=dt;const k=Math.max(0,tr.life/tr.max);
+        tr.mesh.material.opacity=.32*k;
+        tr.mesh.position.addScaledVector(tr.vel,dt);
+        if(tr.life<=0)tr.mesh.visible=false;
+      }else{tr.next-=dt;if(tr.next<=0)triggerTracer(tr);}
     }
   }
   return {root,update};
@@ -489,12 +621,12 @@ function createFocalGlow(){
 function createBattlefieldEnvironment(){
   const root=new THREE.Group();scene.add(root);
   const sunSystem=createSunSprites();
+  const terrain=createDistantTerrain();
   const systems=[
-    createCloudLayer({clouds:Array.from({length:6},()=>5+Math.floor(Math.random()*4)),zMin:78,zMax:165,yMin:13,yMax:42,xSpan:400,speed:2.45,scale:[6.8,14],color:0xd0d7dd,opacity:.15,drift:.3,contrast:.45,warmth:.2}),
-    createCloudLayer({clouds:Array.from({length:8},()=>5+Math.floor(Math.random()*5)),zMin:170,zMax:315,yMin:25,yMax:64,xSpan:640,speed:.68,scale:[10,20],color:0xe0e6ea,opacity:.095,drift:.19,contrast:.28,warmth:.13}),
-    createCloudLayer({clouds:Array.from({length:6},()=>5+Math.floor(Math.random()*4)),zMin:325,zMax:485,yMin:40,yMax:88,xSpan:860,speed:-.2,scale:[16,34],color:0xf1f5f7,opacity:.035,drift:.09,contrast:.14,warmth:.06}),
+    createStormCloudCeiling(),
+    createHazeBands(),
     createNearWisps(),
-    {root:createDistantTerrain(),update(){}},
+    {root:terrain,update(dt,t){terrain.userData.update?.(dt,t);}},
     {root:createGroundHints(),update(){}},
     createSmokeColumns(),
     createBattlefieldActivity(),

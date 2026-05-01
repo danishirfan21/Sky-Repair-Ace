@@ -149,7 +149,7 @@ const audio=createAudioManager({
   player_hit_01:'audio/impacts/player_hit_01.mp3',
   music_base_loop:'audio/music/music_base_loop.mp3',
   music_alt_loop:'audio/music/music_alt_loop.mp3',
-  music_elevenlabs_loop:'audio/music/music_elevenlabs_loop.mp3',
+  music_elevenlabs_loop:'audio/music/gameplay_background.mp3',
   repair_fail:'audio/repair/repair_fail.mp3',
   repair_good:'audio/repair/repair_good.mp3',
   repair_loop:'audio/repair/repair_loop.mp3',

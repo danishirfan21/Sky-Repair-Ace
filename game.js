@@ -211,9 +211,179 @@ void main(){
   gl_FragColor=vec4(sky,1.);}`;
 const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,
   uniforms:{shift:{value:0},uTime:{value:0},glare:{value:0}},vertexShader:skyVert,fragmentShader:skyFrag});
-const sky=new THREE.Mesh(new THREE.SphereGeometry(500,32,16),skyMat);scene.add(sky);
+const sky=new THREE.Mesh(new THREE.SphereGeometry(500,32,16),skyMat);sky.visible=false;
 
-// Environment / atmosphere: cinematic illusion from layered, cheap geometry.
+// Environment / atmosphere: image-driven cinematic parallax backdrop plus lightweight distant activity.
+let parallaxBackdrop=null;
+const backdropTextureLoader=new THREE.TextureLoader();
+function cleanBackdropTextureAlpha(texture,path){
+  const img=texture.image;
+  if(!img?.width||!img?.height)return;
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=img.width;canvas.height=img.height;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(img,0,0);
+    const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const data=imageData.data;
+    for(let i=0;i<data.length;i+=4){
+      const r=data[i],g=data[i+1],b=data[i+2],a=data[i+3];
+      const greenMatte=g>85&&g>r*1.2+12&&g>b*1.1+10;
+      const faintMatte=a<24&&(g>60&&g>r*1.12+8&&g>b*1.08+8);
+      if(a<5||greenMatte||faintMatte)data[i+3]=0;
+    }
+    ctx.putImageData(imageData,0,0);
+    texture.image=canvas;
+    texture.needsUpdate=true;
+  }catch(e){
+    console.warn(`Backdrop texture alpha cleanup skipped: ${path}`,e);
+  }
+}
+function makeBackdropLayer({
+  path,width=536,height=250,x=0,y=0,z=0,opacity=1,renderOrder=0,
+  parallax=.02,driftSpeed=0,blending=THREE.NormalBlending,transparent=true,
+  keyGreen=false,alphaCutoff=0
+}){
+  const texture=backdropTextureLoader.load(
+    path,
+    tex=>{
+      tex.colorSpace=THREE.SRGBColorSpace;
+      tex.minFilter=THREE.LinearFilter;
+      tex.magFilter=THREE.LinearFilter;
+      tex.generateMipmaps=true;
+      if(transparent)cleanBackdropTextureAlpha(tex,path);
+    },
+    undefined,
+    err=>{
+      mesh.visible=false;
+      console.warn(`Backdrop texture failed to load: ${path}`,err);
+    }
+  );
+  texture.colorSpace=THREE.SRGBColorSpace;
+  const material=new THREE.MeshBasicMaterial({
+    map:texture,
+    transparent,
+    opacity,
+    depthWrite:false,
+    depthTest:true,
+    fog:false,
+    side:THREE.DoubleSide,
+    blending
+  });
+  if(keyGreen||alphaCutoff>0){
+    const greenMatteExpr=keyGreen
+      ? 'step(0.22,diffuseColor.g)*step(diffuseColor.r*1.2+0.035,diffuseColor.g)*step(diffuseColor.b*1.1+0.03,diffuseColor.g)'
+      : '0.0';
+    material.onBeforeCompile=shader=>{
+      shader.fragmentShader=shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float greenMatte=${greenMatteExpr};
+        diffuseColor.a*=1.0-greenMatte;
+        if(diffuseColor.a<${alphaCutoff.toFixed(3)})discard;`
+      );
+    };
+    material.customProgramCacheKey=()=>`backdrop-key-${keyGreen}-${alphaCutoff}`;
+  }
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,height),material);
+  mesh.position.set(x,y,z);
+  mesh.renderOrder=renderOrder;
+  mesh.frustumCulled=false;
+  mesh.userData.backdrop={
+    baseX:x,baseY:y,baseZ:z,baseOpacity:opacity,parallax,driftSpeed,
+    drift:Math.random()*width
+  };
+  return mesh;
+}
+function createParallaxBackdrop(){
+  const root=new THREE.Group();
+  root.renderOrder=-100;
+  scene.add(root);
+  const layers=[
+    makeBackdropLayer({path:'image/sky_base_gradient_L0.png',width:558,height:260,opacity:1,renderOrder:0,parallax:.005,transparent:false}),
+    makeBackdropLayer({path:'image/sky_sun_ceiling_L1.png',width:558,height:260,opacity:.92,renderOrder:1,parallax:.01}),
+    makeBackdropLayer({path:'image/far_mountains_L2.png',width:584,height:272,y:-4,opacity:.84,renderOrder:2,parallax:.03,keyGreen:true,alphaCutoff:.035}),
+    makeBackdropLayer({path:'image/god_ray_overlay_L3.png',width:558,height:260,opacity:.34,renderOrder:3,parallax:.01,blending:THREE.AdditiveBlending}),
+    makeBackdropLayer({path:'image/mid_mountains_battlefield_L5.png',width:596,height:278,y:-10,opacity:.96,renderOrder:4,parallax:.08,keyGreen:true,alphaCutoff:.035}),
+    makeBackdropLayer({path:'image/fog_sheet_01_L6.png',width:650,height:303,y:-18,opacity:.28,renderOrder:5,parallax:.10,driftSpeed:.85,alphaCutoff:.01}),
+    makeBackdropLayer({path:'image/near_ridge_canyon_L7.png',width:628,height:293,y:-58,opacity:.96,renderOrder:6,parallax:.20,keyGreen:true,alphaCutoff:.025})
+  ];
+  layers.forEach(layer=>root.add(layer));
+
+  const smokeTexture=backdropTextureLoader.load(
+    'image/smoke_particle_sheet.png',
+    tex=>{
+      tex.colorSpace=THREE.SRGBColorSpace;
+      tex.minFilter=THREE.LinearFilter;
+      tex.magFilter=THREE.LinearFilter;
+    },
+    undefined,
+    err=>console.warn('Backdrop smoke texture failed to load: image/smoke_particle_sheet.png',err)
+  );
+  smokeTexture.colorSpace=THREE.SRGBColorSpace;
+  const smokeSprites=[];
+  for(let i=0;i<7;i++){
+    const material=new THREE.SpriteMaterial({
+      map:smokeTexture,
+      transparent:true,
+      opacity:.11+Math.random()*.08,
+      depthWrite:false,
+      depthTest:true,
+      fog:false,
+      blending:THREE.NormalBlending
+    });
+    const sprite=new THREE.Sprite(material);
+    sprite.renderOrder=7;
+    sprite.position.set((Math.random()-.5)*180,-28+Math.random()*38,-.8);
+    const scale=18+Math.random()*28;
+    sprite.scale.set(scale*(1.15+Math.random()*.7),scale,1);
+    sprite.userData.backdropSmoke={
+      baseX:sprite.position.x,
+      baseY:sprite.position.y,
+      phase:Math.random()*Math.PI*2,
+      rise:.7+Math.random()*.75,
+      drift:(Math.random()-.5)*.7
+    };
+    root.add(sprite);
+    smokeSprites.push(sprite);
+  }
+
+  parallaxBackdrop={root,layers,smokeSprites,viewDir:new THREE.Vector3(),distance:175};
+  updateParallaxBackdrop(0,0);
+  return parallaxBackdrop;
+}
+function updateParallaxBackdrop(dt,elapsed){
+  if(!parallaxBackdrop)return;
+  const {root,layers,smokeSprites,viewDir,distance}=parallaxBackdrop;
+  camera.getWorldDirection(viewDir);
+  root.position.copy(camera.position).addScaledVector(viewDir,distance);
+  root.quaternion.copy(camera.quaternion);
+  const visibleH=2*distance*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5));
+  const visibleW=visibleH*camera.aspect;
+  root.scale.setScalar(Math.max(1,visibleH/235,visibleW/520));
+  const motionX=camera.position.x;
+  const motionY=camera.position.y-3.7;
+  for(const layer of layers){
+    const data=layer.userData.backdrop;
+    data.drift+=dt*data.driftSpeed;
+    layer.position.x=data.baseX-motionX*data.parallax+Math.sin(elapsed*.05+data.drift*.02)*data.driftSpeed*2;
+    layer.position.y=data.baseY-motionY*data.parallax*.35;
+    layer.position.z=data.baseZ;
+    if(layer.renderOrder===3){
+      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.4)*.03,.22,.45);
+    }else if(layer.renderOrder===5){
+      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.23)*.025,.2,.35);
+    }
+  }
+  for(const sprite of smokeSprites){
+    const data=sprite.userData.backdropSmoke;
+    const t=elapsed+data.phase;
+    sprite.position.x=data.baseX-motionX*.07+Math.sin(t*.13)*4+elapsed*data.drift;
+    sprite.position.y=data.baseY+Math.sin(t*.21)*2+((elapsed*data.rise)%18);
+    sprite.material.opacity=(.09+Math.sin(t*.31)*.025)*(sprite.visible?1:0);
+  }
+}
+createParallaxBackdrop();
 const environment=createBattlefieldEnvironment();
 function makeRadialTexture(inner='rgba(255,210,120,1)',outer='rgba(255,120,40,0)',size=96,stretchY=1){
   const c=document.createElement('canvas');c.width=size;c.height=Math.round(size*stretchY);
@@ -488,29 +658,18 @@ function createFocalGlow(){
 }
 function createBattlefieldEnvironment(){
   const root=new THREE.Group();scene.add(root);
-  const sunSystem=createSunSprites();
   const systems=[
-    createCloudLayer({clouds:Array.from({length:6},()=>5+Math.floor(Math.random()*4)),zMin:78,zMax:165,yMin:13,yMax:42,xSpan:400,speed:2.45,scale:[6.8,14],color:0xd0d7dd,opacity:.15,drift:.3,contrast:.45,warmth:.2}),
-    createCloudLayer({clouds:Array.from({length:8},()=>5+Math.floor(Math.random()*5)),zMin:170,zMax:315,yMin:25,yMax:64,xSpan:640,speed:.68,scale:[10,20],color:0xe0e6ea,opacity:.095,drift:.19,contrast:.28,warmth:.13}),
-    createCloudLayer({clouds:Array.from({length:6},()=>5+Math.floor(Math.random()*4)),zMin:325,zMax:485,yMin:40,yMax:88,xSpan:860,speed:-.2,scale:[16,34],color:0xf1f5f7,opacity:.035,drift:.09,contrast:.14,warmth:.06}),
-    createNearWisps(),
-    {root:createDistantTerrain(),update(){}},
-    {root:createGroundHints(),update(){}},
-    createSmokeColumns(),
     createBattlefieldActivity(),
     createDistantPlanes(),
     createFocalGlow()
   ];
-  systems.forEach(s=>root.add(s.root));root.add(sunSystem.root);
+  systems.forEach(s=>root.add(s.root));
   const viewDir=new THREE.Vector3();
   function update(dt,elapsed){
-    skyMat.uniforms.uTime.value=elapsed;skyMat.uniforms.shift.value=Math.min(.78,elapsed/110);
     systems.forEach(s=>s.update(dt,elapsed));
     camera.getWorldDirection(viewDir);
-    const glare=THREE.MathUtils.smoothstep(viewDir.dot(sunSystem.dir),.72,.94);
-    skyMat.uniforms.glare.value=glare;
+    const glare=THREE.MathUtils.smoothstep(viewDir.dot(new THREE.Vector3(-.56,.28,-.78).normalize()),.72,.94);
     renderer.toneMappingExposure=.98+glare*.06+Math.min(.035,elapsed/260);
-    sunSystem.update(glare);
   }
   return {root,update};
 }
@@ -1464,7 +1623,7 @@ let last=performance.now();
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}dt*=timeScale;
-  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
+  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);updateParallaxBackdrop(dt,player.survival);environment.update(dt,player.survival);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

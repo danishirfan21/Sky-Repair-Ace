@@ -242,7 +242,7 @@ function cleanBackdropTextureAlpha(texture,path){
 function makeBackdropLayer({
   path,width=536,height=250,x=0,y=0,z=0,opacity=1,renderOrder=0,
   parallax=.02,driftSpeed=0,blending=THREE.NormalBlending,transparent=true,
-  keyGreen=false,alphaCutoff=0
+  keyGreen=false,alphaCutoff=0,color=0xffffff
 }){
   const texture=backdropTextureLoader.load(
     path,
@@ -262,6 +262,7 @@ function makeBackdropLayer({
   texture.colorSpace=THREE.SRGBColorSpace;
   const material=new THREE.MeshBasicMaterial({
     map:texture,
+    color,
     transparent,
     opacity,
     depthWrite:false,
@@ -300,53 +301,15 @@ function createParallaxBackdrop(){
   root.renderOrder=-100;
   scene.add(root);
   const layers=[
-    makeBackdropLayer({path:'image/sky_base_gradient_L0.png',width:558,height:260,opacity:1,renderOrder:0,parallax:.005,transparent:false}),
-    makeBackdropLayer({path:'image/sky_sun_ceiling_L1.png',width:558,height:260,opacity:.92,renderOrder:1,parallax:.01}),
-    makeBackdropLayer({path:'image/far_mountains_L2.png',width:584,height:272,y:-4,opacity:.84,renderOrder:2,parallax:.03,keyGreen:true,alphaCutoff:.035}),
-    makeBackdropLayer({path:'image/god_ray_overlay_L3.png',width:558,height:260,opacity:.34,renderOrder:3,parallax:.01,blending:THREE.AdditiveBlending}),
-    makeBackdropLayer({path:'image/mid_mountains_battlefield_L5.png',width:596,height:278,y:-10,opacity:.96,renderOrder:4,parallax:.08,keyGreen:true,alphaCutoff:.035}),
-    makeBackdropLayer({path:'image/fog_sheet_01_L6.png',width:650,height:303,y:-18,opacity:.28,renderOrder:5,parallax:.10,driftSpeed:.85,alphaCutoff:.01}),
-    makeBackdropLayer({path:'image/near_ridge_canyon_L7.png',width:628,height:293,y:-58,opacity:.96,renderOrder:6,parallax:.20,keyGreen:true,alphaCutoff:.025})
+    makeBackdropLayer({path:'image/sky_base_gradient_L0.png',width:558,height:260,opacity:1,renderOrder:0,parallax:.002,transparent:false,color:0xc3d0d8}),
+    makeBackdropLayer({path:'image/sky_sun_ceiling_L1.png',width:558,height:260,opacity:.46,renderOrder:1,parallax:.004,color:0xaebfca}),
+    makeBackdropLayer({path:'image/far_mountains_L2.png',width:520,height:168,y:-68,opacity:.46,renderOrder:2,parallax:.012,keyGreen:true,alphaCutoff:.055,color:0x9fb1bd}),
+    makeBackdropLayer({path:'image/god_ray_overlay_L3.png',width:558,height:260,opacity:.20,renderOrder:3,parallax:.004,blending:THREE.AdditiveBlending,color:0xf5d29b}),
+    makeBackdropLayer({path:'image/fog_sheet_01_L6.png',width:640,height:300,y:-42,opacity:.20,renderOrder:5,parallax:.02,driftSpeed:.12,alphaCutoff:.01,color:0xb8c7cf})
   ];
   layers.forEach(layer=>root.add(layer));
 
-  const smokeTexture=backdropTextureLoader.load(
-    'image/smoke_particle_sheet.png',
-    tex=>{
-      tex.colorSpace=THREE.SRGBColorSpace;
-      tex.minFilter=THREE.LinearFilter;
-      tex.magFilter=THREE.LinearFilter;
-    },
-    undefined,
-    err=>console.warn('Backdrop smoke texture failed to load: image/smoke_particle_sheet.png',err)
-  );
-  smokeTexture.colorSpace=THREE.SRGBColorSpace;
   const smokeSprites=[];
-  for(let i=0;i<7;i++){
-    const material=new THREE.SpriteMaterial({
-      map:smokeTexture,
-      transparent:true,
-      opacity:.11+Math.random()*.08,
-      depthWrite:false,
-      depthTest:true,
-      fog:false,
-      blending:THREE.NormalBlending
-    });
-    const sprite=new THREE.Sprite(material);
-    sprite.renderOrder=7;
-    sprite.position.set((Math.random()-.5)*180,-28+Math.random()*38,-.8);
-    const scale=18+Math.random()*28;
-    sprite.scale.set(scale*(1.15+Math.random()*.7),scale,1);
-    sprite.userData.backdropSmoke={
-      baseX:sprite.position.x,
-      baseY:sprite.position.y,
-      phase:Math.random()*Math.PI*2,
-      rise:.7+Math.random()*.75,
-      drift:(Math.random()-.5)*.7
-    };
-    root.add(sprite);
-    smokeSprites.push(sprite);
-  }
 
   parallaxBackdrop={root,layers,smokeSprites,viewDir:new THREE.Vector3(),distance:175};
   updateParallaxBackdrop(0,0);
@@ -370,9 +333,9 @@ function updateParallaxBackdrop(dt,elapsed){
     layer.position.y=data.baseY-motionY*data.parallax*.35;
     layer.position.z=data.baseZ;
     if(layer.renderOrder===3){
-      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.4)*.03,.22,.45);
+      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.4)*.018,.18,.30);
     }else if(layer.renderOrder===5){
-      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.23)*.025,.2,.35);
+      layer.material.opacity=THREE.MathUtils.clamp(data.baseOpacity+Math.sin(elapsed*.23)*.015,.18,.28);
     }
   }
   for(const sprite of smokeSprites){

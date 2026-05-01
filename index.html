@@ -35,17 +35,16 @@
   </div>
   <div id="warn">CRITICAL</div>
   <div id="nearMiss">NEAR MISS +25</div>
-  <div id="repairBox" class="panel">
-    <div class="panel-inner">
-      <div class="muted-label">REPAIR INPUT</div>
-      <div id="key">A</div>
-      <div id="combo">COMBO x0</div>
-      <div id="status"></div>
-      <div id="bar"><div id="perfectZone"></div><div id="marker"></div><div id="fill"></div></div>
-    </div>
+  <div id="repairBox" class="repair-indicator" aria-hidden="true">
+    <svg class="repair-dial" viewBox="0 0 64 64">
+      <circle class="repair-track" cx="32" cy="32" r="26"></circle>
+      <circle id="repairRing" class="repair-ring" cx="32" cy="32" r="26"></circle>
+    </svg>
+    <div id="repairIcon" class="repair-icon"><span></span></div>
+    <div id="status" class="repair-status">HOLD R TO REPAIR</div>
   </div>
   <div id="controls" class="panel">
-    <div class="panel-inner">WASD: move · Mouse/LMB or Space: fire · R: repair · Near misses during repair give score + slow-mo · Perfect repairs unlock weapon tiers</div>
+    <div class="panel-inner">WASD: move &middot; Mouse/LMB or Space: fire &middot; Hold R to repair &middot; Near misses during repair give score + slow-mo &middot; Perfect repairs add combo</div>
   </div>
 </div>
 <div id="lastStand">

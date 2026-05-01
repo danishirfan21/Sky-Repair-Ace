@@ -1059,7 +1059,7 @@ function fireWeapon(){
 // UI refs
 const ui={};
 ['hp','score','time','kills','nearCount','maxCombo','enemyCount','warn','nearMiss',
- 'key','combo','status','fill','marker','flash','vignette','weaponName','weaponRule',
+ 'status','repairRing','repairIcon','flash','vignette','weaponName','weaponRule',
  'comboBadge','comboBadgeValue','comboBadgeLabel',
  'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
@@ -1080,8 +1080,6 @@ function syncComboFeedback(){
     ui.comboBadge.classList.toggle('active',combo>0);
     ui.comboBadge.classList.toggle('flow',combo>=5);
   }
-  if(ui.combo)ui.combo.textContent='COMBO x'+combo;
-  if(ui.fill)ui.fill.style.width=Math.min(100,combo*7)+'%';
 }
 function resetComboFeedback(){
   player.combo=0;
@@ -1156,33 +1154,46 @@ function updateReticleState(){
   ui.reticle.classList.toggle('assist',!dim&&aimAssistState.active);
 }
 
-const repair={active:false,target:'KeyA',phaseT:0,speed:.8};
-const repairKeys=['KeyA','KeyS','KeyD','KeyW'];
-function nextRepairPrompt(){
-  repair.target=repairKeys[Math.floor(Math.random()*repairKeys.length)];
-  if(ui.key)ui.key.textContent=repair.target.replace('Key','');
-  repair.phaseT=0;repair.speed=.75+Math.min(1.65,player.combo*.08);
-}
+const repair={active:false,progress:0,duration:1.45,tookDamage:false,feedbackT:0,feedbackType:'idle'};
+const repairScreenProbe=new THREE.Vector3();
+const repairRingRadius=26;
+const repairRingCircumference=Math.PI*2*repairRingRadius;
+function repairAvailable(){return player.alive&&player.hp<100;}
 function startRepair(){
+  if(repair.active||!repairAvailable())return;
   repair.active=true;
+  repair.progress=0;
+  repair.tookDamage=false;
+  repair.feedbackT=0;
+  repair.feedbackType='active';
   audio.startLoop('repair_loop',.18);
   audioTimers.repairTick=0;
   if(ui.box)ui.box.classList.add('active');
-  if(ui.status)ui.status.textContent=player.combo>0?'HOLD STEADY - COMBO AT RISK':'';
+  if(ui.status)ui.status.textContent='REPAIRING';
   syncComboFeedback();
-  nextRepairPrompt();
 }
-function endRepair(){repair.active=false;audio.stopLoop('repair_loop');if(ui.box)ui.box.classList.remove('active');}
+function endRepair({hide=true}={}){
+  repair.active=false;
+  repair.progress=0;
+  repair.tookDamage=false;
+  audio.stopLoop('repair_loop');
+  if(hide&&ui.box)ui.box.classList.remove('active','perfect','good','interrupted');
+}
 let timeScale=1,slowTimer=0;
 function slowmo(dur=.25,sc=.34){timeScale=sc;slowTimer=dur;}
 
 function repairSuccess(perfect){
-  player.combo++;player.maxCombo=Math.max(player.maxCombo,player.combo);
-  const heal=perfect?10+player.combo*2.5:5+player.combo*1.6;player.hp=Math.min(100,player.hp+heal);
-  syncComboFeedback();
-  pulseComboBadge();
-  if(ui.status)ui.status.textContent=perfect?'PERFECT WEAPON CHARGE!':'GOOD';
-  particle(player.group.position.clone().add(new THREE.Vector3(0,0,.4)),perfect?0x66f7ff:0xffd27a,perfect?12:6);
+  endRepair({hide:false});
+  repair.progress=1;
+  repair.feedbackT=.85;
+  repair.feedbackType=perfect?'perfect':'good';
+  const heal=perfect?38+Math.min(18,player.combo*1.5):24+Math.min(12,player.combo*.8);
+  player.hp=Math.min(100,player.hp+heal);
+  if(perfect)addCombo(1,player.group.position.clone().add(new THREE.Vector3(0,1.28,.25)),'+1 COMBO','#9ffcff');
+  else syncComboFeedback();
+  if(ui.status)ui.status.textContent=perfect?'PERFECT REPAIR':'GOOD REPAIR';
+  particle(player.group.position.clone().add(new THREE.Vector3(0,0,.4)),perfect?0x66f7ff:0x6ef7ff,perfect?12:7);
+  if(!perfect)spawnRepairSparks(false);
   if(perfect)spawnRepairSparks(true);
   calmPlayerDamageSmoke();
   playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
@@ -1192,29 +1203,66 @@ function repairSuccess(perfect){
     slowmo(.42,.38);
     flashScreen(.62,'rgba(205,255,255,1)');
     perfectRepairBurst();
-    floatingText('PERFECT',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#9ffcff');
+    floatingText('PERFECT REPAIR',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#9ffcff');
     player.shake=Math.max(player.shake,.18);
     feedbackState.perfectGlow=1;
     feedbackState.perfectZoom=1;
+  }else{
+    floatingText('GOOD REPAIR',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#9ffcff');
   }
-  setWeaponFromCombo(player.combo);nextRepairPrompt();
 }
-function repairFail(){
-  player.combo=0;player.hp-=12;
+function cancelRepair(){
+  if(!repair.active)return;
+  endRepair();
+  repair.feedbackT=0;
+  repair.feedbackType='idle';
+  if(ui.status)ui.status.textContent='HOLD R TO REPAIR';
+}
+function interruptRepair(){
+  if(!repair.active)return;
+  endRepair({hide:false});
+  repair.feedbackT=.85;
+  repair.feedbackType='interrupted';
+  repair.progress=0;
+  resetComboFeedback();
   resetCombatComboState();
-  syncComboFeedback();
-  if(ui.status)ui.status.textContent='MISS - SYSTEM SPARK';
-  player.shake=.35;audio.play('repair_fail',.28);particle(player.group.position,0xff4b2f,10);
-  setWeaponFromCombo(0);nextRepairPrompt();
+  if(ui.status)ui.status.textContent='REPAIR INTERRUPTED';
+  floatingText('REPAIR INTERRUPTED',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#ff7a3d');
+  player.shake=.35;
+  audio.play('repair_fail',.28);
+  particle(player.group.position,0xff4b2f,10);
+  setWeaponFromCombo(0);
 }
 function updateRepair(dt){
-  repair.phaseT+=dt*repair.speed;const phase=Math.sin(repair.phaseT*Math.PI*2)*.5+.5;
+  if(!keys.has('KeyR')){cancelRepair();return;}
+  repair.progress=THREE.MathUtils.clamp(repair.progress+dt/repair.duration,0,1);
   audioTimers.repairTick-=dt;
-  if(audioTimers.repairTick<=0){audio.play('repair_tick',.07,false);audioTimers.repairTick=.22;}
-  if(ui.marker)ui.marker.style.left=(phase*300)+'px';
-  const perfect=phase>.46&&phase<.54,good=phase>.31&&phase<.69;
-  if(keys.has(repair.target)){if(perfect)repairSuccess(true);else if(good)repairSuccess(false);else repairFail();}
-  if(player.hp>=100&&player.combo>=3){if(ui.status)ui.status.textContent='SYSTEM RESTORED';endRepair();}
+  if(audioTimers.repairTick<=0){audio.play('repair_tick',.045,false);audioTimers.repairTick=.24;}
+  if(ui.status)ui.status.textContent=repair.progress<.08?'HOLD R TO REPAIR':'REPAIRING';
+  if(repair.progress>=1)repairSuccess(!repair.tookDamage);
+}
+function updateRepairIndicator(){
+  if(!ui.box)return;
+  const visible=player.alive&&(repair.active||repair.feedbackT>0);
+  ui.box.classList.toggle('active',visible);
+  ui.box.classList.toggle('perfect',repair.feedbackType==='perfect');
+  ui.box.classList.toggle('good',repair.feedbackType==='good');
+  ui.box.classList.toggle('interrupted',repair.feedbackType==='interrupted');
+  if(!visible)return;
+  repairScreenProbe.copy(player.group.position).project(camera);
+  if(repairScreenProbe.z<-1||repairScreenProbe.z>1){
+    ui.box.classList.remove('active');
+    return;
+  }
+  const x=(repairScreenProbe.x*.5+.5)*innerWidth;
+  const y=(-repairScreenProbe.y*.5+.5)*innerHeight-78;
+  ui.box.style.left=`${x}px`;
+  ui.box.style.top=`${y}px`;
+  const progress=repair.active?repair.progress:(repair.feedbackType==='good'||repair.feedbackType==='perfect'?1:0);
+  if(ui.repairRing){
+    ui.repairRing.style.strokeDasharray=repairRingCircumference;
+    ui.repairRing.style.strokeDashoffset=repairRingCircumference*(1-THREE.MathUtils.clamp(progress,0,1));
+  }
 }
 function nearMissStreak(pos) {
   const streak = new THREE.Mesh(
@@ -1258,6 +1306,8 @@ function enemyBullet(pos,dir){
   bullets.push({mesh:g,pos:pos.clone(),vel:dir.multiplyScalar(58),life:3,maxLife:3,hostile:true,explosive:false,nearChecked:false,color:0xff3b1f,prevPos:pos.clone(),tracerLength,trailT:0});
 }
 function damagePlayer(n){
+  const repairingAtHit=repair.active;
+  if(repairingAtHit)repair.tookDamage=true;
   player.hp=Math.max(0,player.hp-n);
   player.shake=Math.max(player.shake, 0.5);
   flashScreen(0.32, 'rgba(255,30,20,1)');
@@ -1265,10 +1315,14 @@ function damagePlayer(n){
   burstParticles(pos, { color: 0xff5733, count: 12, speed: 12, size: [0.04, 0.11], life: [0.22, 0.55], additive: true });
   audio.play('player_hit_01',.24);
   if(n>=12){
-    resetCombatComboState();
-    if(player.combo>0){
-      resetComboFeedback();
-      floatingText('COMBO BROKEN',player.group.position.clone().add(new THREE.Vector3(0,1.25,.2)),'#ff7a3d');
+    if(repairingAtHit){
+      interruptRepair();
+    }else{
+      resetCombatComboState();
+      if(player.combo>0){
+        resetComboFeedback();
+        floatingText('COMBO BROKEN',player.group.position.clone().add(new THREE.Vector3(0,1.25,.2)),'#ff7a3d');
+      }
     }
   }
   const now=performance.now()/1000;
@@ -1277,6 +1331,8 @@ function damagePlayer(n){
 }
 function endGame(){
   if(!player.alive)return;player.alive=false;endRepair();
+  repair.feedbackT=0;
+  repair.feedbackType='idle';
   resetCombatComboState();
   audio.stopLoop('mg_overdrive_loop');
   audio.fadeLoop('engine_loop',0,.75,true);
@@ -1299,6 +1355,10 @@ function endGame(){
 }
 function resetGame(){
   releaseMouseCapture();
+  endRepair();
+  repair.feedbackT=0;
+  repair.feedbackType='idle';
+  repair.progress=0;
   audio.stopLoop('repair_loop');
   audio.stopLoop('mg_overdrive_loop');
   audioTimers.criticalBeep=0;
@@ -1349,6 +1409,7 @@ function updatePlayer(dt){
   const ex=player.group.userData.exhaust;
   if(ex){ex.scale.setScalar(.8+Math.random()*.5);ex.material.opacity=.5+Math.random()*.4;}
   if(keys.has('KeyR')&&!repair.active&&player.hp<100)startRepair();if(repair.active)updateRepair(dt);
+  if(!repair.active&&repair.feedbackT>0)repair.feedbackT=Math.max(0,repair.feedbackT-dt);
   player.fireCd-=dt;const tier=currentTier();
   if((keys.has('Space')||mouse.down)&&!repair.active&&player.fireCd<=0){fireWeapon();player.fireCd=tier.cd;}
   if(player.weapon==='overdrive'&&(keys.has('Space')||mouse.down)&&!repair.active)audio.startLoop('mg_overdrive_loop',.18);
@@ -1609,6 +1670,7 @@ function updateUI(){
     ui.warn.classList.toggle('active',critical);
   }
   updateReticleState();
+  updateRepairIndicator();
 }
 let last=performance.now();
 function animate(now=performance.now()){

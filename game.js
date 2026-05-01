@@ -108,6 +108,10 @@ function createAudioManager(paths){
     const el=loops.get(name);
     if(el)el.volume=v;
   }
+  function setLoopPlaybackRate(name,rate=1){
+    const el=loops.get(name);
+    if(el)el.playbackRate=THREE.MathUtils.clamp(rate,.82,1.18);
+  }
   function fadeLoop(name,volume=0,duration=.7,stopAtEnd=false){
     if(loopFades.has(name)){clearInterval(loopFades.get(name));loopFades.delete(name);}
     const target=THREE.MathUtils.clamp(volume,0,1);
@@ -134,7 +138,7 @@ function createAudioManager(paths){
     startLoop('music_elevenlabs_loop',musicVolumeConfig.gameplay);
     startLoop('engine_damaged_loop',0);
   }
-  return {play,playRandom:(names,volume=1)=>play(names[Math.floor(Math.random()*names.length)],volume),startLoop,stopLoop,setLoopVolume,fadeLoop,unlock,get unlocked(){return unlocked;}};
+  return {play,playRandom:(names,volume=1)=>play(names[Math.floor(Math.random()*names.length)],volume),startLoop,stopLoop,setLoopVolume,setLoopPlaybackRate,fadeLoop,unlock,get unlocked(){return unlocked;}};
 }
 const audio=createAudioManager({
   distant_battle_loop:'audio/ambience/distant_battle_loop.mp3',
@@ -178,6 +182,9 @@ function updateAudioMix(dt){
   const damageTarget=player.alive&&player.hp<45?.05+(45-player.hp)/45*.15:0;
   audioMix.damagedEngine=THREE.MathUtils.lerp(audioMix.damagedEngine,damageTarget,Math.min(1,dt*2.5));
   audio.setLoopVolume('engine_damaged_loop',audioMix.damagedEngine);
+  const engineWarp=player.alive&&player.hp<30?1+Math.sin(feedbackState.pulse*Math.PI*2)*.035*feedbackState.critical:1;
+  audio.setLoopPlaybackRate('engine_loop',engineWarp);
+  audio.setLoopPlaybackRate('engine_damaged_loop',engineWarp*.96);
   const musicTarget=player.alive&&player.hp<30?musicVolumeConfig.critical:player.alive?musicVolumeConfig.gameplay:musicVolumeConfig.gameOver;
   audioMix.music=THREE.MathUtils.lerp(audioMix.music,musicTarget,Math.min(1,dt*1.4));
   audio.setLoopVolume('music_elevenlabs_loop',audioMix.music);
@@ -635,6 +642,8 @@ const player={group:makePlane(),vel:new THREE.Vector3(),hp:100,score:0,combo:0,m
   startTime:performance.now(),survival:0};
 scene.add(player.group);player.group.rotation.y=Math.PI;
 const playerDamageVisuals=createPlayerDamageVisuals(player.group);
+const feedbackState={critical:0,pulse:0,perfectGlow:0,perfectZoom:0,comboPulse:0,flow:0};
+let freezeTimer=0;
 
 const bullets=[],enemies=[],particles=[];
 const vfx = [];
@@ -735,6 +744,30 @@ function spawnRepairSparks(perfect=false){
     drag:.92,
     additive:true
   });
+}
+function perfectRepairBurst(){
+  const origin=player.group.position.clone().add(new THREE.Vector3(0,.15,.25));
+  const halo=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:makeRadialTexture('rgba(180,255,255,1)','rgba(80,245,255,0)',128),
+    transparent:true,opacity:.92,blending:THREE.AdditiveBlending,depthWrite:false
+  }));
+  halo.position.copy(origin);
+  halo.scale.set(4.2,4.2,1);
+  scene.add(halo);
+  vfx.push({mesh:halo,life:.22,max:.22,type:'flash',grow:6.2});
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(1.25,.035,8,72),
+    new THREE.MeshBasicMaterial({color:0x9ffcff,transparent:true,opacity:.86,blending:THREE.AdditiveBlending,depthWrite:false})
+  );
+  ring.position.copy(origin);
+  ring.rotation.x=Math.PI/2;
+  scene.add(ring);
+  vfx.push({mesh:ring,life:.28,max:.28,type:'ring',grow:4.8});
+  const l=new THREE.PointLight(0x9ffcff,10,18);
+  l.position.copy(origin);
+  scene.add(l);
+  particles.push({mesh:l,vel:new THREE.Vector3(),life:.18,max:.18,light:true});
+  burstParticles(origin,{color:0x9ffcff,count:26,speed:13,size:[0.03,.1],life:[.18,.44],gravity:0,drag:.93,additive:true});
 }
 function playerDamageLevel(){
   if(player.hp<40)return 3;
@@ -990,11 +1023,12 @@ function muzzleFlash(pos, color = 0xffd27a, size = 1.55) {
 function shootOne(offX,angle=0,color=currentTier().color,explosive=false){
   const tracerColor = explosive ? 0xff8a35 : 0xffd36a;
   const overdrive = player.weapon === 'overdrive';
+  const flowBoost=1+feedbackState.flow*.18;
   const m = createTracerMesh({
     color: tracerColor,
-    radius: overdrive ? 0.068 : 0.045,
+    radius: (overdrive ? 0.068 : 0.045)*flowBoost,
     glowMultiplier: 6.3,
-    glowOpacity: overdrive ? 0.4 : 0.34
+    glowOpacity: (overdrive ? 0.4 : 0.34)+feedbackState.flow*.08
   });
   const start = player.group.position.clone().add(new THREE.Vector3(offX,.12,-2.75));
   const dir=aimedDirectionFrom(start,angle);
@@ -1002,9 +1036,9 @@ function shootOne(offX,angle=0,color=currentTier().color,explosive=false){
   alignTracerMesh(m, start.clone().addScaledVector(dir, -tracerLength), start, tracerLength);
   scene.add(m);
   bullets.push({mesh:m,pos:start.clone(),vel:dir.multiplyScalar(overdrive ? 105 : 98),life:1,maxLife:1,hostile:false,explosive,color:tracerColor,prevPos:start.clone(),tracerLength,trailT:0});
-  muzzleFlash(start, color, explosive ? 1.15 : overdrive ? 1.1 : 0.92);
+  muzzleFlash(start, color, (explosive ? 1.15 : overdrive ? 1.1 : 0.92)*flowBoost);
   player.shake = Math.max(player.shake, 0.045);
-  player.cameraKick = Math.max(player.cameraKick || 0, 0.13);
+  player.cameraKick = Math.max(player.cameraKick || 0, 0.13+feedbackState.flow*.035);
 }
 function fireWeapon(){
   const tier=currentTier();
@@ -1025,10 +1059,34 @@ function fireWeapon(){
 const ui={};
 ['hp','score','time','kills','nearCount','maxCombo','enemyCount','warn','nearMiss',
  'key','combo','status','fill','marker','flash','vignette','weaponName','weaponRule',
+ 'comboBadge','comboBadgeValue','comboBadgeLabel',
  'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
 ui.reticle=document.getElementById('aimReticle');
+
+function pulseComboBadge(){
+  feedbackState.comboPulse=.22;
+  if(!ui.comboBadge)return;
+  ui.comboBadge.classList.remove('pulse');
+  void ui.comboBadge.offsetWidth;
+  ui.comboBadge.classList.add('pulse');
+}
+function syncComboFeedback(){
+  const combo=Math.max(0,player.combo|0);
+  if(ui.comboBadgeValue)ui.comboBadgeValue.textContent='x'+combo;
+  if(ui.comboBadge){
+    ui.comboBadge.classList.toggle('active',combo>0);
+    ui.comboBadge.classList.toggle('flow',combo>=5);
+  }
+  if(ui.combo)ui.combo.textContent='COMBO x'+combo;
+  if(ui.fill)ui.fill.style.width=Math.min(100,combo*7)+'%';
+}
+function resetComboFeedback(){
+  player.combo=0;
+  syncComboFeedback();
+  setWeaponFromCombo(0);
+}
 
 const reticleTimers={fire:null,hit:null,kill:null};
 function restartReticlePulse(cls,duration){
@@ -1085,8 +1143,7 @@ function startRepair(){
   audioTimers.repairTick=0;
   if(ui.box)ui.box.classList.add('active');
   if(ui.status)ui.status.textContent='';
-  if(ui.combo)ui.combo.textContent='COMBO x0';
-  if(ui.fill)ui.fill.style.width='0%';
+  syncComboFeedback();
   nextRepairPrompt();
 }
 function endRepair(){repair.active=false;audio.stopLoop('repair_loop');if(ui.box)ui.box.classList.remove('active');}
@@ -1096,20 +1153,29 @@ function slowmo(dur=.25,sc=.34){timeScale=sc;slowTimer=dur;}
 function repairSuccess(perfect){
   player.combo++;player.maxCombo=Math.max(player.maxCombo,player.combo);
   const heal=perfect?10+player.combo*2.5:5+player.combo*1.6;player.hp=Math.min(100,player.hp+heal);
-  if(ui.combo)ui.combo.textContent='COMBO x'+player.combo;
-  if(ui.fill)ui.fill.style.width=Math.min(100,player.combo*7)+'%';
+  syncComboFeedback();
+  pulseComboBadge();
   if(ui.status)ui.status.textContent=perfect?'PERFECT WEAPON CHARGE!':'GOOD';
   particle(player.group.position.clone().add(new THREE.Vector3(0,0,.4)),perfect?0x66f7ff:0xffd27a,perfect?12:6);
   if(perfect)spawnRepairSparks(true);
   calmPlayerDamageSmoke();
   playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
   audio.play(perfect?'repair_perfect':'repair_good',perfect?.28:.24);
-  if(perfect){slowmo(.25,.34);flash(.55);}
+  if(perfect){
+    freezeTimer=.045;
+    slowmo(.42,.38);
+    flashScreen(.62,'rgba(205,255,255,1)');
+    perfectRepairBurst();
+    floatingText('PERFECT',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#9ffcff');
+    player.shake=Math.max(player.shake,.18);
+    feedbackState.perfectGlow=1;
+    feedbackState.perfectZoom=1;
+  }
   setWeaponFromCombo(player.combo);nextRepairPrompt();
 }
 function repairFail(){
   player.combo=0;player.hp-=12;
-  if(ui.combo)ui.combo.textContent='COMBO x0';if(ui.fill)ui.fill.style.width='0%';
+  syncComboFeedback();
   if(ui.status)ui.status.textContent='MISS - SYSTEM SPARK';
   player.shake=.35;audio.play('repair_fail',.28);particle(player.group.position,0xff4b2f,10);
   setWeaponFromCombo(0);nextRepairPrompt();
@@ -1139,8 +1205,8 @@ function showNearMiss(){
   player.maxCombo=Math.max(player.maxCombo,player.combo);
   if(ui.nearMiss){ui.nearMiss.classList.add('show');ui.nearMiss.textContent='NEAR MISS +25';setTimeout(()=>ui.nearMiss.classList.remove('show'),260);}
   if(ui.status)ui.status.textContent='NEAR MISS CHARGE!';
-  if(ui.combo)ui.combo.textContent='COMBO x'+player.combo;
-  if(ui.fill)ui.fill.style.width=Math.min(100,player.combo*7)+'%';
+  syncComboFeedback();
+  pulseComboBadge();
   particle(player.group.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.6,.1,-.4)),0x9ffcff,8);
   nearMissStreak(player.group.position.clone());
   flashScreen(0.1, 'rgba(120,245,255,1)');
@@ -1171,6 +1237,10 @@ function damagePlayer(n){
   const pos = player.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2));
   burstParticles(pos, { color: 0xff5733, count: 12, speed: 12, size: [0.04, 0.11], life: [0.22, 0.55], additive: true });
   audio.play('player_hit_01',.24);
+  if(n>=12&&player.combo>0){
+    resetComboFeedback();
+    floatingText('COMBO BROKEN',player.group.position.clone().add(new THREE.Vector3(0,1.25,.2)),'#ff7a3d');
+  }
   const now=performance.now()/1000;
   if(player.hp<30&&now-audioTimers.criticalBeep>1.15){audio.play('critical_beep',.22);audioTimers.criticalBeep=now;}
   if(player.hp<=0)endGame();
@@ -1183,6 +1253,8 @@ function endGame(){
   audio.fadeLoop('wind_loop',0,.75,true);
   audio.fadeLoop('distant_battle_loop',.02,.75);
   audio.stopLoop('music_base_loop');
+  audio.setLoopPlaybackRate('engine_loop',1);
+  audio.setLoopPlaybackRate('engine_damaged_loop',1);
   audio.setLoopVolume('music_elevenlabs_loop',musicVolumeConfig.gameOver);
   releaseMouseCapture();
   if(ui.finalTime)ui.finalTime.textContent=player.survival.toFixed(1)+'s';
@@ -1201,6 +1273,8 @@ function resetGame(){
   audioTimers.enemyShot=0;
   audioMix.damagedEngine=0;
   audioMix.music=musicVolumeConfig.gameplay;
+  audio.setLoopPlaybackRate('engine_loop',1);
+  audio.setLoopPlaybackRate('engine_damaged_loop',1);
   if(audio.unlocked){
     audio.startLoop('engine_loop',.25);
     audio.startLoop('wind_loop',.12);
@@ -1219,9 +1293,11 @@ function resetGame(){
   Object.assign(aimAssistState,{target:null,timer:0,active:false,strength:0});
   Object.assign(playerDamageFx,{smokeTimer:0,sparkTimer:0,fireTimer:0});
   Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,cameraKick:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0});
+  Object.assign(feedbackState,{critical:0,pulse:0,perfectGlow:0,perfectZoom:0,comboPulse:0,flow:0});
+  freezeTimer=0;timeScale=1;slowTimer=0;
   updatePlayerDamageVisuals(0);
   resetAimToCenter();
-  player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);
+  player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);syncComboFeedback();
   if(ui.lastStand)ui.lastStand.classList.remove('show');for(let i=0;i<5;i++)spawnEnemy();
 }
 if(ui.restart)ui.restart.addEventListener('click',resetGame);
@@ -1291,6 +1367,9 @@ function updateVFX(dt) {
       fx.mesh.material.opacity = k; const grow = fx.grow || 1; fx.mesh.scale.multiplyScalar(1 + dt * grow);
     } else if (fx.type === 'streak') {
       fx.mesh.material.opacity = 0.55 * k; fx.mesh.scale.z = 0.5 + k;
+    } else if (fx.type === 'ring') {
+      fx.mesh.material.opacity = 0.86 * k;
+      fx.mesh.scale.multiplyScalar(1 + dt * (fx.grow || 4));
     } else if (fx.type === 'beamTrail') {
       if (fx.mesh.children) {
         fx.mesh.children.forEach((child, idx) => {
@@ -1439,12 +1518,41 @@ function updateParticles(dt) {
     if (p.grow) { p.mesh.scale.multiplyScalar(1 + dt * 1.4); if (p.mesh.material) p.mesh.material.opacity = (p.baseOpacity ?? 0.34) * k; }
   }
 }
+function updateFeedbackState(dt){
+  const criticalTarget=player.alive?THREE.MathUtils.clamp((34-player.hp)/18,0,1):0;
+  feedbackState.critical=THREE.MathUtils.lerp(feedbackState.critical,criticalTarget,1-Math.exp(-dt*5.4));
+  feedbackState.pulse=(feedbackState.pulse+dt*(1.05+feedbackState.critical*.55))%1;
+  feedbackState.perfectGlow=Math.max(0,feedbackState.perfectGlow-dt*2.9);
+  feedbackState.perfectZoom=Math.max(0,feedbackState.perfectZoom-dt*2.4);
+  feedbackState.comboPulse=Math.max(0,feedbackState.comboPulse-dt);
+  const flowTarget=THREE.MathUtils.clamp((player.combo-4)/8,0,1);
+  feedbackState.flow=THREE.MathUtils.lerp(feedbackState.flow,flowTarget,1-Math.exp(-dt*3.2));
+
+  const heartbeat=.55+.45*Math.sin(feedbackState.pulse*Math.PI*2);
+  const panic=feedbackState.critical*(.72+.28*heartbeat);
+  if(ui.vignette){
+    ui.vignette.style.opacity=panic*.9;
+    ui.vignette.style.background=`radial-gradient(circle at 50% 48%,transparent ${43-panic*5}%,rgba(110,0,0,${.14+panic*.22}) 68%,rgba(0,0,0,${.42+panic*.22}) 100%)`;
+  }
+  const redTint=feedbackState.critical;
+  const flowLift=feedbackState.flow*.08+feedbackState.perfectGlow*.1;
+  renderer.domElement.style.filter=`saturate(${1-redTint*.3+flowLift}) sepia(${redTint*.12}) hue-rotate(${redTint*-6}deg) brightness(${1-redTint*.07+flowLift})`;
+}
 function updateCamera(dt){
   const base=player.group.position.clone().add(new THREE.Vector3(0,3.7,11));
+  const panic=feedbackState.critical;
+  const heartbeat=Math.sin(feedbackState.pulse*Math.PI*2);
+  const criticalShake=panic>0?new THREE.Vector3(Math.sin(feedbackState.pulse*Math.PI*4.1)*.09*panic,heartbeat*.055*panic,0):new THREE.Vector3();
   const s=player.shake>0?new THREE.Vector3((Math.random()-.5)*player.shake,(Math.random()-.5)*player.shake,0):new THREE.Vector3();
+  s.add(criticalShake);
   const kickOffset = new THREE.Vector3(0, 0, player.cameraKick || 0);
   camera.position.lerp(base.add(s).add(kickOffset), dt * 4.5);
   camera.lookAt(player.group.position.clone().add(new THREE.Vector3(0,.8,-15)));
+  const targetFov=65-feedbackState.perfectZoom*2.6+panic*.7-feedbackState.flow*.45;
+  if(Math.abs(camera.fov-targetFov)>.01){
+    camera.fov=THREE.MathUtils.lerp(camera.fov,targetFov,1-Math.exp(-dt*5));
+    camera.updateProjectionMatrix();
+  }
   player.shake=Math.max(0,player.shake-dt*1.8);
   player.cameraKick = Math.max(0, (player.cameraKick || 0) - dt * 0.5);
 }
@@ -1456,15 +1564,25 @@ function updateUI(){
   if(ui.nearCount)ui.nearCount.textContent=player.nearMisses;
   if(ui.maxCombo)ui.maxCombo.textContent=player.maxCombo;
   if(ui.enemyCount)ui.enemyCount.textContent=enemies.length;
-  if(ui.warn)ui.warn.style.opacity=player.hp<30&&player.alive?1:0;
-  if(ui.vignette)ui.vignette.style.opacity=player.hp<32&&player.alive?.9:0;
+  if(ui.warn){
+    const critical=player.hp<30&&player.alive;
+    ui.warn.style.opacity=critical?1:0;
+    ui.warn.classList.toggle('active',critical);
+  }
+  syncComboFeedback();
   updateReticleState();
 }
 let last=performance.now();
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
-  if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}dt*=timeScale;
-  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
+  if(freezeTimer>0){
+    freezeTimer=Math.max(0,freezeTimer-dt);
+    dt=0;
+  }else{
+    if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}
+    dt*=timeScale;
+  }
+  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateEnemies(dt);updateBullets(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateFeedbackState(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

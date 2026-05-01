@@ -893,8 +893,49 @@ const weaponTiers=[
   {combo:0,id:'single',name:'Single Shot',rule:'Combo x0',duration:0,cd:.16,color:0xffdd88}
 ];
 function tierForCombo(c){return weaponTiers.find(t=>c>=t.combo)||weaponTiers.at(-1);}
+let centerToastEl=null,centerToastTimer=null;
+function centerToast(text,color='#ffd27a',duration=760,kind='warm'){
+  if(!centerToastEl){
+    centerToastEl=document.createElement('div');
+    centerToastEl.id='centerToast';
+    document.body.appendChild(centerToastEl);
+  }
+  if(centerToastTimer)clearTimeout(centerToastTimer);
+  centerToastEl.className=`show ${kind}`;
+  centerToastEl.textContent=text;
+  centerToastEl.style.color=color;
+  centerToastTimer=setTimeout(()=>{
+    if(centerToastEl)centerToastEl.classList.remove('show');
+    centerToastTimer=null;
+  },duration);
+}
+function clearCenterToast(){
+  if(centerToastTimer)clearTimeout(centerToastTimer);
+  centerToastTimer=null;
+  if(centerToastEl)centerToastEl.classList.remove('show');
+}
+function pulseWeaponPanel(tier){
+  if(!ui.weapon)return;
+  ui.weapon.classList.remove('weapon-pulse','cyan');
+  void ui.weapon.offsetWidth;
+  if(tier?.id==='overdrive'||tier?.color===0x66f7ff)ui.weapon.classList.add('cyan');
+  ui.weapon.classList.add('weapon-pulse');
+  setTimeout(()=>ui.weapon?.classList.remove('weapon-pulse','cyan'),420);
+}
 function setWeaponFromCombo(combo){
-  const tier=tierForCombo(combo);if(tier.id!==player.weapon){flashScreen(.42,'rgba(255,224,130,1)');player.cameraKick=Math.max(player.cameraKick||0,.22);audio.play('ui_click',.12);}
+  const tier=tierForCombo(combo);
+  const changed=tier.id!==player.weapon;
+  if(changed){
+    const special=tier.combo>=8||tier.id==='overdrive';
+    flashScreen(special?.2:.16,special?'rgba(130,245,255,1)':'rgba(255,224,130,1)');
+    player.cameraKick=Math.max(player.cameraKick||0,special?.34:.26);
+    freezeTimer=Math.max(freezeTimer,special?.055:.045);
+    audio.play('ui_click',.12);
+    if(tier.combo>0&&player.alive){
+      pulseWeaponPanel(tier);
+      centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm');
+    }
+  }
   player.weapon=tier.id;player.weaponTimer=tier.duration;
   if(ui.weaponName)ui.weaponName.textContent=tier.name;
   if(ui.weaponRule)ui.weaponRule.textContent=tier.rule;
@@ -1060,7 +1101,7 @@ function fireWeapon(){
 const ui={};
 ['hp','score','time','kills','nearCount','maxCombo','enemyCount','warn','nearMiss',
  'status','repairRing','repairIcon','flash','vignette','weaponName','weaponRule',
- 'comboBadge','comboBadgeValue','comboBadgeLabel',
+ 'weapon','comboBadge','comboBadgeValue','comboBadgeLabel','comboCharge',
  'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
@@ -1078,8 +1119,10 @@ function syncComboFeedback(){
   if(ui.comboBadgeValue)ui.comboBadgeValue.textContent='x'+combo;
   if(ui.comboBadge){
     ui.comboBadge.classList.toggle('active',combo>0);
-    ui.comboBadge.classList.toggle('flow',combo>=5);
+    ui.comboBadge.classList.toggle('overdrive',combo>=5);
+    ui.comboBadge.classList.toggle('flow',combo>=8);
   }
+  if(ui.comboCharge)ui.comboCharge.style.width=THREE.MathUtils.clamp(combo/15,0,1)*100+'%';
 }
 function resetComboFeedback(){
   player.combo=0;
@@ -1103,7 +1146,12 @@ function registerEnemyHitCombo(pos){
   combatComboState.hitTimer=1.5;
   if(combatComboState.hitCount>=3){
     combatComboState.hitCount=0;
-    addCombo(1,pos,'+1 COMBO','#9ffcff');
+    addCombo(1,pos,'HIT CHAIN +1','#9ffcff');
+    pulseReticleChain();
+    player.cameraKick=Math.max(player.cameraKick||0,.08);
+    player.shake=Math.max(player.shake,.035);
+    particle(pos,0x9ffcff,4);
+    flashScreen(.06,'rgba(120,245,255,1)');
   }
 }
 function updateCombatComboState(dt){
@@ -1112,7 +1160,7 @@ function updateCombatComboState(dt){
   if(combatComboState.hitTimer<=0)combatComboState.hitCount=0;
 }
 
-const reticleTimers={fire:null,hit:null,kill:null};
+const reticleTimers={fire:null,hit:null,kill:null,chain:null};
 function restartReticlePulse(cls,duration){
   if(!ui.reticle)return;
   if(reticleTimers[cls])clearTimeout(reticleTimers[cls]);
@@ -1131,9 +1179,13 @@ function pulseReticleHit(){
   if(ui.reticle)ui.reticle.classList.remove('fire');
   restartReticlePulse('hit',170);
 }
-function pulseReticleKill(){
+function pulseReticleChain(){
   if(ui.reticle)ui.reticle.classList.remove('fire','hit');
-  restartReticlePulse('kill',200);
+  restartReticlePulse('chain',210);
+}
+function pulseReticleKill(){
+  if(ui.reticle)ui.reticle.classList.remove('fire','hit','chain');
+  restartReticlePulse('kill',270);
 }
 const reticleProbe=new THREE.Vector3();
 function updateReticleState(){
@@ -1183,6 +1235,7 @@ let timeScale=1,slowTimer=0;
 function slowmo(dur=.25,sc=.34){timeScale=sc;slowTimer=dur;}
 
 function repairSuccess(perfect){
+  const clutchPerfect=perfect&&player.hp<30;
   endRepair({hide:false});
   repair.progress=1;
   repair.feedbackT=.85;
@@ -1207,6 +1260,11 @@ function repairSuccess(perfect){
     player.shake=Math.max(player.shake,.18);
     feedbackState.perfectGlow=1;
     feedbackState.perfectZoom=1;
+    if(clutchPerfect){
+      player.shake=Math.max(player.shake,.25);
+      flashScreen(.22,'rgba(255,245,180,1)');
+      centerToast('CLUTCH SAVE', '#fff1b8', 760, 'warm');
+    }
   }else{
     floatingText('GOOD REPAIR',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#9ffcff');
   }
@@ -1243,11 +1301,14 @@ function updateRepair(dt){
 }
 function updateRepairIndicator(){
   if(!ui.box)return;
-  const visible=player.alive&&(repair.active||repair.feedbackT>0);
+  const clutchPrompt=player.alive&&!repair.active&&repair.feedbackT<=0&&player.hp<30&&repairAvailable();
+  const visible=player.alive&&(repair.active||repair.feedbackT>0||clutchPrompt);
   ui.box.classList.toggle('active',visible);
   ui.box.classList.toggle('perfect',repair.feedbackType==='perfect');
   ui.box.classList.toggle('good',repair.feedbackType==='good');
   ui.box.classList.toggle('interrupted',repair.feedbackType==='interrupted');
+  ui.box.classList.toggle('clutch',clutchPrompt||(repair.active&&player.hp<30));
+  if(clutchPrompt&&ui.status)ui.status.textContent='CLUTCH REPAIR AVAILABLE';
   if(!visible)return;
   repairScreenProbe.copy(player.group.position).project(camera);
   if(repairScreenProbe.z<-1||repairScreenProbe.z>1){
@@ -1258,7 +1319,7 @@ function updateRepairIndicator(){
   const y=(-repairScreenProbe.y*.5+.5)*innerHeight-78;
   ui.box.style.left=`${x}px`;
   ui.box.style.top=`${y}px`;
-  const progress=repair.active?repair.progress:(repair.feedbackType==='good'||repair.feedbackType==='perfect'?1:0);
+  const progress=repair.active?repair.progress:(repair.feedbackType==='good'||repair.feedbackType==='perfect'?1:(clutchPrompt ? .08 : 0));
   if(ui.repairRing){
     ui.repairRing.style.strokeDasharray=repairRingCircumference;
     ui.repairRing.style.strokeDashoffset=repairRingCircumference*(1-THREE.MathUtils.clamp(progress,0,1));
@@ -1333,6 +1394,7 @@ function endGame(){
   if(!player.alive)return;player.alive=false;endRepair();
   repair.feedbackT=0;
   repair.feedbackType='idle';
+  clearCenterToast();
   resetCombatComboState();
   audio.stopLoop('mg_overdrive_loop');
   audio.fadeLoop('engine_loop',0,.75,true);
@@ -1359,6 +1421,7 @@ function resetGame(){
   repair.feedbackT=0;
   repair.feedbackType='idle';
   repair.progress=0;
+  clearCenterToast();
   audio.stopLoop('repair_loop');
   audio.stopLoop('mg_overdrive_loop');
   audioTimers.criticalBeep=0;
@@ -1595,10 +1658,12 @@ function updateBullets(dt){
             const killPos=e.group.position.clone();
             pulseReticleKill();
             explosion(killPos, true);scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;
-            addCombo(1,killPos.clone().add(new THREE.Vector3(0,.7,0)),'KILL COMBO','#ffd27a');
-            floatingText('+50', killPos, '#fff1b8',{fontSize:28,life:.95,rise:54});
-            player.cameraKick=Math.max(player.cameraKick||0,.28);
-            flashScreen(0.18, 'rgba(255,236,160,1)'); audio.play('ui_confirm',.08,false);
+            freezeTimer=Math.max(freezeTimer,.045);
+            addCombo(1,killPos.clone().add(new THREE.Vector3(0,.9,0)),'COMBO +1','#ffd27a');
+            floatingText('KILL +50', killPos.clone().add(new THREE.Vector3(0,.35,0)), '#fff1b8',{fontSize:30,life:.95,rise:54});
+            player.cameraKick=Math.max(player.cameraKick||0,.34);
+            player.shake=Math.max(player.shake,.16);
+            flashScreen(0.12, 'rgba(255,198,92,1)'); audio.play('ui_confirm',.08,false);
           }break;
         }
       }

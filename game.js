@@ -1164,12 +1164,11 @@ function nextRepairPrompt(){
   repair.phaseT=0;repair.speed=.75+Math.min(1.65,player.combo*.08);
 }
 function startRepair(){
-  repair.active=true;player.combo=0;
-  resetCombatComboState();
+  repair.active=true;
   audio.startLoop('repair_loop',.18);
   audioTimers.repairTick=0;
   if(ui.box)ui.box.classList.add('active');
-  if(ui.status)ui.status.textContent='';
+  if(ui.status)ui.status.textContent=player.combo>0?'HOLD STEADY - COMBO AT RISK':'';
   syncComboFeedback();
   nextRepairPrompt();
 }

@@ -166,9 +166,46 @@ const audio=createAudioManager({
   bullet_whiz_02:'audio/weapons/bullet_whiz_02.mp3',
   enemy_mg_burst_01:'audio/weapons/enemy_mg_burst_01.mp3',
   mg_burst_01:'audio/weapons/mg_burst_01.mp3',
-  mg_overdrive_loop:'audio/weapons/mg_overdrive_loop.mp3'
+  mg_overdrive_loop:'audio/weapons/mg_overdrive_loop.mp3',
+  reward_enemy_hit:'audio/rewards/enemy_hit.mp3',
+  reward_hit_chain:'audio/rewards/hit_chain.mp3',
+  reward_kill_confirm:'audio/rewards/kill_confirm.mp3',
+  reward_combo_increase:'audio/rewards/combo_increase.mp3',
+  reward_near_miss:'audio/rewards/near_miss_reward.mp3',
+  reward_repair:'audio/rewards/repair_reward.mp3',
+  reward_perfect_repair:'audio/rewards/perfect_repair.mp3',
+  reward_weapon_unlock:'audio/rewards/weapon_unlock_stinger.mp3',
+  reward_incoming_fire:'audio/rewards/incoming_enemy_fire_cue.mp3',
+  reward_bullet_intercept:'audio/rewards/bullet_intercept_reward.mp3',
+  reward_combo_broken:'audio/rewards/combo_broken.mp3'
 });
 const audioTimers={shot:0,enemyShot:0,hitConfirm:0,hitMetal:0,repairTick:0,criticalBeep:0};
+const rewardCueIds={
+  hit:'reward_enemy_hit',
+  chain:'reward_hit_chain',
+  kill:'reward_kill_confirm',
+  combo:'reward_combo_increase',
+  nearMiss:'reward_near_miss',
+  repair:'reward_repair',
+  perfectRepair:'reward_perfect_repair',
+  unlock:'reward_weapon_unlock',
+  incomingFire:'reward_incoming_fire',
+  intercept:'reward_bullet_intercept',
+  comboBroken:'reward_combo_broken'
+};
+const rewardCueVolumes={hit:.11,chain:.16,kill:.24,combo:.13,nearMiss:.18,repair:.16,perfectRepair:.24,unlock:.24,incomingFire:.13,intercept:.17,comboBroken:.15};
+const rewardCueThrottle={hit:.22,chain:.26,combo:.3,nearMiss:.34,repair:.42,incomingFire:1.15,intercept:.28,comboBroken:.42};
+const rewardCueLast={};
+function playRewardCue(type,options={}){
+  const id=rewardCueIds[type];
+  if(!id)return false;
+  const now=performance.now()/1000;
+  if(type==='combo'&&now-(rewardCueLast.kill||0)<.36)return false;
+  const throttle=rewardCueThrottle[type]??.24;
+  if(!options.force&&now-(rewardCueLast[type]||0)<throttle)return false;
+  rewardCueLast[type]=now;
+  return audio.play(id,options.volume ?? rewardCueVolumes[type] ?? .15,false);
+}
 const musicVolumeConfig={
   gameplay:0.55,
   critical:0.68,
@@ -959,6 +996,7 @@ function setWeaponFromCombo(combo){
     audio.play('ui_click',.12);
     if(tier.combo>0&&player.alive){
       pulseWeaponPanel(tier);
+      playRewardCue('unlock',{force:true});
       centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm',{unlock:true});
     }
   }
@@ -1135,7 +1173,18 @@ ui.reticle=document.getElementById('aimReticle');
 
 const rewardFeedItems=[];
 const maxRewardFeedItems=5;
-const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT']);
+const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','NEAR MISS','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT','WEAPON UNLOCK']);
+const rewardCueByLabel={
+  'ENEMY HIT':'hit',
+  'HIT CHAIN':'chain',
+  'KILL':'kill',
+  'COMBO':'combo',
+  'NEAR MISS':'nearMiss',
+  'INTERCEPT':'intercept',
+  'GOOD REPAIR':'repair',
+  'PERFECT REPAIR':'perfectRepair',
+  'REPAIR INTERRUPTED':'comboBroken'
+};
 const rewardIconAssets={
   'ENEMY HIT':'/ui/rewards/enemy-hit.png',
   'HIT CHAIN':'/ui/rewards/combo.png',
@@ -1168,6 +1217,12 @@ function rewardPriorityFor(label,options={}){
   if(highPriorityRewardLabels.has(label))return 3;
   return options.emphasis?2:1;
 }
+function rewardLifeFor(label,options={},priority=1){
+  const requested=options.life ?? options.duration;
+  const minLife=label==='ENEMY HIT'?.95:priority>=3||options.emphasis?1.48:1.18;
+  const preferred=label==='ENEMY HIT'?.98:priority>=3||options.emphasis?1.58:1.28;
+  return Math.max(requested ?? preferred,minLife);
+}
 function removeRewardFeedItem(item){
   if(item.timer)clearTimeout(item.timer);
   item.el?.remove();
@@ -1191,9 +1246,9 @@ function makeRoomForReward(priority){
 }
 function pushRewardFeed(label,value,options={}){
   if(!ui.rewardFeed||!label)return;
-  const life=options.life ?? options.duration ?? .78;
   const priority=rewardPriorityFor(label,options);
   if(!makeRoomForReward(priority))return;
+  const life=rewardLifeFor(label,options,priority);
   const line=document.createElement('div');
   line.className=`reward-line${options.emphasis?' emphasis':''}${options.colorClass?' '+options.colorClass:''}`;
   if(options.color)line.style.color=options.color;
@@ -1226,6 +1281,11 @@ function pushRewardFeed(label,value,options={}){
   const item={el:line,timer:null,priority,label};
   item.timer=setTimeout(()=>removeRewardFeedItem(item),life*1000+80);
   rewardFeedItems.push(item);
+  const cueType=options.cueType ?? rewardCueByLabel[label];
+  if(options.cue!==false&&cueType){
+    const forceCue=options.forceCue ?? (cueType==='kill'||cueType==='perfectRepair');
+    playRewardCue(cueType,{force:forceCue,volume:options.cueVolume});
+  }
 }
 function flushEnemyHitRewardFeed(){
   if(enemyHitFeedState.timer){
@@ -1515,6 +1575,7 @@ function showNearMiss(){
 function enemyBullet(pos,dir){
   const now=performance.now()/1000;
   if(now-audioTimers.enemyShot>.2){audio.play('enemy_mg_burst_01',.18);audioTimers.enemyShot=now;}
+  playRewardCue('incomingFire');
   muzzleFlash(pos, 0xff3b1f, 0.9);
   const g = createTracerMesh({
     color: 0xff3b1f,
@@ -1544,6 +1605,7 @@ function damagePlayer(n){
       if(player.combo>0){
         resetComboFeedback();
         floatingText('COMBO BROKEN',player.group.position.clone().add(new THREE.Vector3(0,1.25,.2)),'#ff7a3d');
+        playRewardCue('comboBroken');
       }
     }
   }

@@ -97,6 +97,30 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 #centerToast.show{opacity:1;transform:translate(-50%,-50%) scale(1);animation:centerToastPop .44s ease-out}
 #centerToast.cyan{text-shadow:0 0 16px currentColor,0 0 38px rgba(70,242,255,.46)}
 
+#rewardFeed{
+  position:fixed;top:58%;left:50%;z-index:8;pointer-events:none;
+  width:clamp(260px,24vw,340px);transform:translateX(-50%);
+  display:flex;flex-direction:column;gap:2px;align-items:stretch;
+}
+.reward-line{
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:8px;
+  min-height:18px;padding:1px 3px;
+  font-size:13px;line-height:1;font-weight:700;letter-spacing:.08em;
+  color:#f8fbff;text-shadow:0 0 8px currentColor,0 1px 2px rgba(0,0,0,.72);
+  opacity:0;animation:rewardLineFade var(--reward-life,.78s) ease-out forwards;
+}
+.reward-line .reward-icon{
+  min-width:13px;text-align:center;font-size:11px;color:currentColor;opacity:.95;
+}
+.reward-line .reward-label{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;
+}
+.reward-line .reward-value{
+  min-width:42px;text-align:right;color:#ffd27a;text-shadow:0 0 9px rgba(255,210,122,.78),0 1px 2px rgba(0,0,0,.72);
+}
+.reward-line.emphasis{font-size:14px;font-weight:900}
+.reward-line.cyan .reward-value{color:#9ffcff;text-shadow:0 0 9px rgba(70,242,255,.82),0 1px 2px rgba(0,0,0,.72)}
+
 /* Warnings & popups */
 #warn{position:absolute;top:15%;left:50%;transform:translateX(-50%);font-weight:900;font-size:38px;letter-spacing:.2em;opacity:0;color:#ff4b2f;text-shadow:0 0 18px #fff1c7,0 0 34px #ff4b2f,0 0 72px rgba(255,75,47,.55);transition:.15s}
 #warn.active{animation:criticalPulse .86s ease-in-out infinite}
@@ -258,6 +282,12 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   0%{transform:scale(.96);filter:drop-shadow(0 0 0 rgba(255,191,64,0))}
   42%{transform:scale(1.18);filter:drop-shadow(0 0 24px rgba(255,191,64,.72))}
   100%{transform:scale(1);filter:drop-shadow(0 0 15px rgba(255,191,64,.36))}
+}
+@keyframes rewardLineFade{
+  0%{opacity:0;transform:translateY(8px) scale(.98)}
+  12%{opacity:1;transform:translateY(0) scale(1)}
+  62%{opacity:.92}
+  100%{opacity:0;transform:translateY(-13px) scale(.99)}
 }
 @keyframes weaponUnlockPulse{
   0%{transform:scale(.98);filter:drop-shadow(0 0 0 rgba(255,191,64,0))}

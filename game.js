@@ -1101,11 +1101,57 @@ function fireWeapon(){
 const ui={};
 ['hp','score','time','kills','nearCount','maxCombo','enemyCount','warn','nearMiss',
  'status','repairRing','repairIcon','flash','vignette','weaponName','weaponRule',
- 'weapon','comboBadge','comboBadgeValue','comboBadgeLabel','comboCharge',
+ 'weapon','comboBadge','comboBadgeValue','comboBadgeLabel','comboCharge','rewardFeed',
  'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
 ui.reticle=document.getElementById('aimReticle');
+
+const rewardFeedItems=[];
+const maxRewardFeedItems=5;
+function formatRewardValue(value){
+  if(value===undefined||value===null||value==='')return '';
+  if(typeof value==='number')return `${value>=0?'+':''}${value}`;
+  return String(value);
+}
+function removeRewardFeedItem(item){
+  if(item.timer)clearTimeout(item.timer);
+  item.el?.remove();
+  const idx=rewardFeedItems.indexOf(item);
+  if(idx>=0)rewardFeedItems.splice(idx,1);
+}
+function pushRewardFeed(label,value,options={}){
+  if(!ui.rewardFeed||!label)return;
+  const life=options.life ?? options.duration ?? .78;
+  const line=document.createElement('div');
+  line.className=`reward-line${options.emphasis?' emphasis':''}${options.colorClass?' '+options.colorClass:''}`;
+  if(options.color)line.style.color=options.color;
+  if(options.color==='#9ffcff'||options.color==='#6ef7ff')line.classList.add('cyan');
+  line.style.setProperty('--reward-life',`${life}s`);
+
+  const icon=document.createElement('span');
+  icon.className='reward-icon';
+  icon.textContent=options.icon || '';
+  const labelEl=document.createElement('span');
+  labelEl.className='reward-label';
+  labelEl.textContent=label;
+  const valueEl=document.createElement('span');
+  valueEl.className='reward-value';
+  valueEl.textContent=formatRewardValue(value);
+
+  line.append(icon,labelEl,valueEl);
+  ui.rewardFeed.appendChild(line);
+  const item={el:line,timer:null};
+  item.timer=setTimeout(()=>removeRewardFeedItem(item),life*1000+80);
+  rewardFeedItems.push(item);
+  while(rewardFeedItems.length>maxRewardFeedItems)removeRewardFeedItem(rewardFeedItems[0]);
+}
+function clearRewardFeed(){
+  rewardFeedItems.splice(0).forEach(item=>{
+    if(item.timer)clearTimeout(item.timer);
+    item.el?.remove();
+  });
+}
 
 function pulseComboBadge(){
   feedbackState.comboPulse=.22;
@@ -1133,12 +1179,13 @@ function resetCombatComboState(){
   combatComboState.hitCount=0;
   combatComboState.hitTimer=0;
 }
-function addCombo(amount=1,pos=player.group.position,label='+1 COMBO',color='#ffd27a'){
+function addCombo(amount=1,pos=player.group.position,label='COMBO',color='#ffd27a',opts={}){
   player.combo=Math.max(0,player.combo)+amount;
   player.maxCombo=Math.max(player.maxCombo,player.combo);
   syncComboFeedback();
   pulseComboBadge();
-  if(pos)floatingText(label,pos,color,{fontSize:24,life:.9,rise:48});
+  if(opts.feed!==false&&label)pushRewardFeed(label,opts.feedValue ?? amount,{color,icon:opts.icon,emphasis:opts.emphasis,life:opts.life});
+  if(opts.float&&pos)floatingText(opts.floatText || label,pos,color,{fontSize:opts.fontSize || 24,life:opts.floatLife || .9,rise:opts.rise || 48});
   setWeaponFromCombo(player.combo);
 }
 function registerEnemyHitCombo(pos){
@@ -1146,7 +1193,7 @@ function registerEnemyHitCombo(pos){
   combatComboState.hitTimer=1.5;
   if(combatComboState.hitCount>=3){
     combatComboState.hitCount=0;
-    addCombo(1,pos,'HIT CHAIN +1','#9ffcff');
+    addCombo(1,null,'HIT CHAIN','#9ffcff',{feedValue:'+1',icon:'✦',life:.82});
     pulseReticleChain();
     player.cameraKick=Math.max(player.cameraKick||0,.08);
     player.shake=Math.max(player.shake,.035);
@@ -1242,7 +1289,7 @@ function repairSuccess(perfect){
   repair.feedbackType=perfect?'perfect':'good';
   const heal=perfect?38+Math.min(18,player.combo*1.5):24+Math.min(12,player.combo*.8);
   player.hp=Math.min(100,player.hp+heal);
-  if(perfect)addCombo(1,player.group.position.clone().add(new THREE.Vector3(0,1.28,.25)),'+1 COMBO','#9ffcff');
+  if(perfect)addCombo(1,null,'COMBO','#9ffcff',{feedValue:'+1',icon:'✦',emphasis:true,life:.96});
   else syncComboFeedback();
   if(ui.status)ui.status.textContent=perfect?'PERFECT REPAIR':'GOOD REPAIR';
   particle(player.group.position.clone().add(new THREE.Vector3(0,0,.4)),perfect?0x66f7ff:0x6ef7ff,perfect?12:7);
@@ -1252,6 +1299,8 @@ function repairSuccess(perfect){
   playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
   audio.play(perfect?'repair_perfect':'repair_good',perfect?.28:.24);
   if(perfect){
+    pushRewardFeed('PERFECT REPAIR',`+${Math.round(heal)}`,{color:'#9ffcff',icon:'✦',emphasis:true,life:1.1});
+    centerToast('PERFECT REPAIR', '#9ffcff', 760, 'cyan');
     freezeTimer=.045;
     slowmo(.42,.38);
     flashScreen(.62,'rgba(205,255,255,1)');
@@ -1266,7 +1315,7 @@ function repairSuccess(perfect){
       centerToast('CLUTCH SAVE', '#fff1b8', 760, 'warm');
     }
   }else{
-    floatingText('GOOD REPAIR',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#9ffcff');
+    pushRewardFeed('GOOD REPAIR',`+${Math.round(heal)}`,{color:'#9ffcff',life:.85});
   }
 }
 function cancelRepair(){
@@ -1285,7 +1334,7 @@ function interruptRepair(){
   resetComboFeedback();
   resetCombatComboState();
   if(ui.status)ui.status.textContent='REPAIR INTERRUPTED';
-  floatingText('REPAIR INTERRUPTED',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#ff7a3d');
+  pushRewardFeed('REPAIR INTERRUPTED','',{color:'#ff7a3d',icon:'!',emphasis:true,life:.9});
   player.shake=.35;
   audio.play('repair_fail',.28);
   particle(player.group.position,0xff4b2f,10);
@@ -1339,7 +1388,7 @@ function nearMissStreak(pos) {
 function showNearMiss(){
   player.nearMisses++;player.score+=25;player.combo=Math.max(player.combo,0)+1;
   player.maxCombo=Math.max(player.maxCombo,player.combo);
-  if(ui.nearMiss){ui.nearMiss.classList.add('show');ui.nearMiss.textContent='NEAR MISS +25';setTimeout(()=>ui.nearMiss.classList.remove('show'),260);}
+  pushRewardFeed('NEAR MISS','+25',{color:'#9ffcff',icon:'✦',emphasis:true,life:.84});
   if(ui.status)ui.status.textContent='NEAR MISS CHARGE!';
   syncComboFeedback();
   pulseComboBadge();
@@ -1395,6 +1444,8 @@ function endGame(){
   repair.feedbackT=0;
   repair.feedbackType='idle';
   clearCenterToast();
+  clearRewardFeed();
+  if(ui.nearMiss)ui.nearMiss.classList.remove('show');
   resetCombatComboState();
   audio.stopLoop('mg_overdrive_loop');
   audio.fadeLoop('engine_loop',0,.75,true);
@@ -1422,6 +1473,8 @@ function resetGame(){
   repair.feedbackType='idle';
   repair.progress=0;
   clearCenterToast();
+  clearRewardFeed();
+  if(ui.nearMiss)ui.nearMiss.classList.remove('show');
   audio.stopLoop('repair_loop');
   audio.stopLoop('mg_overdrive_loop');
   audioTimers.criticalBeep=0;
@@ -1600,7 +1653,7 @@ function interceptBullets(){
       playerBullet.consumed=true;hostileBullet.consumed=true;
       burstParticles(hit.midpoint,{color:0xfff4c8,count:10,speed:11,size:[0.035,0.09],life:[0.14,0.32],additive:true});
       burstParticles(hit.midpoint,{color:0x9ffcff,count:5,speed:8,size:[0.025,0.06],life:[0.12,0.25],additive:true});
-      floatingText(`INTERCEPT +${bulletInterceptConfig.score}`,hit.midpoint,'#fff1b8');
+      pushRewardFeed('INTERCEPT',bulletInterceptConfig.score,{color:'#fff1b8',icon:'✦',emphasis:true,life:.88});
       player.score+=bulletInterceptConfig.score;
       player.shake=Math.max(player.shake,.08);
       audio.playRandom(whizSounds,.16);audio.play('ui_confirm',.06,false);
@@ -1651,6 +1704,7 @@ function updateBullets(dt){
           e.hp-=b.explosive?3:1;
           hitImpact(hit.closest, b.color || 0xffd27a);
           pulseReticleHit();
+          pushRewardFeed('ENEMY HIT',b.explosive?'+3':'+1',{color:'#f8fbff',life:.48});
           registerEnemyHitCombo(hit.closest);
           if(b.explosive)explosion(e.group.position.clone(), true);
           b.consumed=true;
@@ -1659,8 +1713,8 @@ function updateBullets(dt){
             pulseReticleKill();
             explosion(killPos, true);scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;
             freezeTimer=Math.max(freezeTimer,.045);
-            addCombo(1,killPos.clone().add(new THREE.Vector3(0,.9,0)),'COMBO +1','#ffd27a');
-            floatingText('KILL +50', killPos.clone().add(new THREE.Vector3(0,.35,0)), '#fff1b8',{fontSize:30,life:.95,rise:54});
+            pushRewardFeed('KILL','+50',{color:'#fff1b8',icon:'✦',emphasis:true,life:.9});
+            addCombo(1,null,'COMBO','#ffd27a',{feedValue:'+1',life:.82});
             player.cameraKick=Math.max(player.cameraKick||0,.34);
             player.shake=Math.max(player.shake,.16);
             flashScreen(0.12, 'rgba(255,198,92,1)'); audio.play('ui_confirm',.08,false);

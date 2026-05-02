@@ -757,6 +757,7 @@ let nextGunSide = -1;
 let runToken = 0;
 const perfCaps={bullets:120,hostileBullets:72,mines:10,particles:180,vfx:100,ambientTracers:12,scorePopups:14};
 const bulletInterceptConfig={enabled:true,radius:.9,score:10};
+const interceptComboState={count:0};
 const playerDamageFx={smokeTimer:0,sparkTimer:0,fireTimer:0};
 const specialEnemyState={bomberSpawned:false,aceSpawned:false,miniBossSpawned:false};
 const repairOvercharge={timer:0,duration:5};
@@ -774,7 +775,7 @@ function removeExpiredBulletForCap(){
   }
   return false;
 }
-function removeFarthestBulletForCap(){
+function removeFarthestBulletForCap(predicate=null){
   if(!bullets.length)return false;
   let farthestIdx=-1;
   let farthestScore=-Infinity;
@@ -782,6 +783,7 @@ function removeFarthestBulletForCap(){
   const cameraPos=camera?.position;
   for(let i=0;i<bullets.length;i++){
     const b=bullets[i];
+    if(predicate&&!predicate(b))continue;
     const pos=b?.pos ?? b?.mesh?.position;
     if(!pos)continue;
     const playerDist=playerPos?pos.distanceToSquared(playerPos):0;
@@ -798,11 +800,17 @@ function removeFarthestBulletForCap(){
   }
   return false;
 }
+function countBullets(predicate){
+  let count=0;
+  for(const b of bullets)if(predicate(b))count++;
+  return count;
+}
 function addBullet(bullet){
   if(dopamineConfig.enablePooling&&bullet?.hostile){
-    while(bullets.filter(b=>b.hostile).length>=perfCaps.hostileBullets){
+    while(countBullets(b=>b.hostile)>=perfCaps.hostileBullets){
       const idx=bullets.findIndex(b=>b.hostile&&(b.consumed||b.life<=0));
       if(idx>=0){removeBulletAt(idx);continue;}
+      if(removeFarthestBulletForCap(b=>b.hostile))continue;
       const hostileIdx=bullets.findIndex(b=>b.hostile);
       if(hostileIdx>=0)removeBulletAt(hostileIdx);
       else break;
@@ -942,6 +950,7 @@ function removeMineAt(index,detonate=false,reward=false){
   if(reward){
     pushRewardFeed('INTERCEPT','+15',{color:'#fff1b8',icon:'*',emphasis:false,life:.72,cueType:'intercept'});
     player.score+=15;
+    addCombo(1,m.pos,'COMBO','#fff1b8',{feedValue:'+1',life:.7,icon:'*'});
   }
   scene.remove(m.mesh);
   mines.splice(index,1);
@@ -959,7 +968,7 @@ function spawnMine(enemy){
   drift.z=18+Math.random()*5;
   drift.x+=Math.sin(enemy.t)*2.2;
   drift.y+=Math.cos(enemy.t*.7)*.9;
-  mines.push({mesh,pos,vel:drift,life:4.8,max:4.8,trail:0,damage:14});
+  mines.push({mesh,pos,vel:drift,life:4.8,max:4.8,trail:0,damage:14,nearChecked:false});
 }
 function updateMines(dt){
   if(!player.alive)return;
@@ -976,6 +985,11 @@ function updateMines(dt){
       m.trail=.12;
     }
     const d=m.pos.distanceTo(player.group.position);
+    if(!m.nearChecked&&d>1.35&&d<2.55&&Math.abs(m.pos.z-player.group.position.z)<1.9){
+      m.nearChecked=true;
+      showNearMiss();
+      if(repair.active)repair.dangerRecent=Math.max(repair.dangerRecent,.9);
+    }
     if(d<1.35){
       removeMineAt(i,true,false);
       damagePlayer(m.damage);
@@ -1586,6 +1600,7 @@ function updateThreatRadar(dt){
     node.style.top=`${46+y}px`;
     node.style.opacity=String(THREE.MathUtils.clamp(1-dist/105,.62,1));
     node.classList.toggle('danger',dist<28);
+    node.classList.toggle('warning',(e.warningTimer||0)>0);
   }
 }
 function hideStartHint(){
@@ -1876,7 +1891,7 @@ function updateReticleState(){
   ui.reticle.classList.toggle('assist',dopamineConfig.enableAimAssistReticle&&!dim&&aimAssistState.active);
 }
 
-const repair={active:false,progress:0,duration:1.45,tookDamage:false,feedbackT:0,feedbackType:'idle'};
+const repair={active:false,progress:0,duration:1.45,tookDamage:false,feedbackT:0,feedbackType:'idle',dangerRecent:0};
 const repairScreenProbe=new THREE.Vector3();
 const repairRingRadius=26;
 const repairRingCircumference=Math.PI*2*repairRingRadius;
@@ -1889,6 +1904,7 @@ function startRepair(){
   repair.tookDamage=false;
   repair.feedbackT=0;
   repair.feedbackType='active';
+  repair.dangerRecent=0;
   audio.startLoop('repair_loop',.18);
   audioTimers.repairTick=0;
   if(ui.box)ui.box.classList.add('active');
@@ -1919,7 +1935,7 @@ function updateOvercharge(dt){
 }
 
 function repairSuccess(perfect){
-  const clutchPerfect=perfect&&player.hp<30;
+  const clutchPerfect=perfect&&(player.hp<30||repair.dangerRecent>0);
   endRepair({hide:false});
   repair.progress=1;
   repair.feedbackT=.85;
@@ -1953,6 +1969,9 @@ function repairSuccess(perfect){
       flashScreen(.22,'rgba(255,245,180,1)');
       pushRewardFeed('CLUTCH SAVE','',{color:'#fff1b8',icon:'!',emphasis:true,life:1.05});
       centerToast('CLUTCH SAVE', '#fff1b8', 760, 'warm');
+      freezeTimer=Math.max(freezeTimer,.065);
+      slowmo(.32,.46);
+      playRewardCue('perfectRepair',{force:true,duck:true,duckAmount:.38});
     }
   }else{
     pushRewardFeed('GOOD REPAIR',`+${Math.round(heal)}`,{color:'#9ffcff',life:.85});
@@ -1982,6 +2001,7 @@ function interruptRepair(){
 }
 function updateRepair(dt){
   if(!keys.has('KeyR')){cancelRepair();return;}
+  repair.dangerRecent=Math.max(0,repair.dangerRecent-dt);
   repair.progress=THREE.MathUtils.clamp(repair.progress+dt/repair.duration,0,1);
   audioTimers.repairTick-=dt;
   if(audioTimers.repairTick<=0){audio.play('repair_tick',.045,false);audioTimers.repairTick=.24;}
@@ -2000,19 +2020,33 @@ function updateRepairIndicator(){
   ui.box.classList.toggle('good-zone',repair.active&&repair.progress>.58);
   ui.box.classList.toggle('perfect-zone',repair.active&&!repair.tookDamage&&repair.progress>.84);
   let hostileNear=false;
+  let closestThreat=null,closestThreatDist=Infinity;
   if(repair.active&&dopamineConfig.enableRepairWarningArcs){
     for(const b of bullets){
       if(!b.hostile||!b.pos)continue;
       const d=b.pos.distanceTo(player.group.position);
-      if(d<4.25&&Math.abs(b.pos.z-player.group.position.z)<2.4){hostileNear=true;break;}
-    }
-    if(!hostileNear){
-      for(const m of mines){
-        const d=m.pos.distanceTo(player.group.position);
-        if(d<5.2&&Math.abs(m.pos.z-player.group.position.z)<3.2){hostileNear=true;break;}
+      if(d<5.15&&Math.abs(b.pos.z-player.group.position.z)<2.8&&d<closestThreatDist){
+        closestThreat=b.pos;closestThreatDist=d;
       }
     }
-    if(hostileNear)playRewardCue('incomingFire');
+    for(const m of mines){
+      const d=m.pos.distanceTo(player.group.position);
+      if(d<5.8&&Math.abs(m.pos.z-player.group.position.z)<3.4&&d<closestThreatDist){
+        closestThreat=m.pos;closestThreatDist=d;
+      }
+    }
+    hostileNear=!!closestThreat;
+    if(hostileNear){
+      const rel=closestThreat.clone().sub(player.group.position);
+      const angle=Math.atan2(rel.x,-rel.z)*180/Math.PI;
+      const intensity=THREE.MathUtils.clamp(1-closestThreatDist/5.8,.18,1);
+      ui.box.style.setProperty('--danger-angle',`${210+angle}deg`);
+      ui.box.style.setProperty('--danger-alpha',String(.28+intensity*.52));
+      repair.dangerRecent=Math.max(repair.dangerRecent,.75);
+      playRewardCue('incomingFire');
+    }else{
+      ui.box.style.setProperty('--danger-alpha','0');
+    }
   }
   ui.box.classList.toggle('danger',hostileNear);
   if(clutchPrompt&&ui.status)ui.status.textContent='CLUTCH REPAIR AVAILABLE';
@@ -2144,6 +2178,7 @@ function resetRunTransientState(){
   specialEnemyState.aceSpawned=false;
   specialEnemyState.miniBossSpawned=false;
   repairOvercharge.timer=0;
+  interceptComboState.count=0;
   player.lastStand=false;
   player.lastStandTimer=0;
   player.lastStandUsed=false;
@@ -2164,6 +2199,7 @@ function endGame(){
   if(!player.alive)return;player.alive=false;endRepair();
   repair.feedbackT=0;
   repair.feedbackType='idle';
+  repair.dangerRecent=0;
   repairOvercharge.timer=0;
   ui.overcharge?.classList.remove('active');
   clearCenterToast();
@@ -2171,6 +2207,7 @@ function endGame(){
   resetRewardCueState();
   if(ui.nearMiss)ui.nearMiss.classList.remove('show');
   resetCombatComboState();
+  interceptComboState.count=0;
   audio.stopLoop('mg_overdrive_loop');
   audio.fadeLoop('engine_loop',0,.75,true);
   audio.fadeLoop('engine_damaged_loop',0,.75,true);
@@ -2183,6 +2220,7 @@ function endGame(){
   audioMix.duck=0;
   audioMix.duckTimer=0;
   audio.setLoopVolume('music_elevenlabs_loop',musicVolumeConfig.gameOver);
+  mines.splice(0).forEach(m=>scene.remove(m.mesh));
   releaseMouseCapture();
   if(ui.finalTime)ui.finalTime.textContent=player.survival.toFixed(1)+'s';
   if(ui.finalKills)ui.finalKills.textContent=player.kills;
@@ -2200,6 +2238,7 @@ function resetGame(){
   repair.feedbackT=0;
   repair.feedbackType='idle';
   repair.progress=0;
+  repair.dangerRecent=0;
   clearCenterToast();
   clearRewardFeed();
   resetRewardCueState();
@@ -2281,6 +2320,7 @@ function updateEnemies(dt){
     const aggression=e.aggression ?? 1;
     const kind=e.kind||'normal';
     e.dodgeTimer=Math.max(0,(e.dodgeTimer||0)-dt);
+    e.warningTimer=Math.max(0,(e.warningTimer||0)-dt);
     const speedScale=kind==='bomber'?.68:kind==='ace'?1.28:kind==='miniBoss'?.62:1;
     const dx=e.type==='swoop'?Math.sin(e.t*(kind==='ace'?3.8:2.4))*dt*(8+aggression*1.8)*speedScale:0;
     const dy=e.type==='dive'?Math.sin(e.t*1.5)*dt*(5+aggression*1.6)*speedScale:0;
@@ -2299,6 +2339,7 @@ function updateEnemies(dt){
       }
     }
     e.fire-=dt;if(e.fire<=0&&e.group.position.z<-6){
+      e.warningTimer=.42;
       enemyBullet(e.group.position.clone().add(new THREE.Vector3(0,0,1.2)),player.group.position.clone().sub(e.group.position).normalize());
       if(kind==='miniBoss'&&e.burstShots<2){
         e.burstShots++;
@@ -2419,6 +2460,11 @@ function interceptBullets(){
       burstParticles(hit.midpoint,{color:0x9ffcff,count:5,speed:8,size:[0.025,0.06],life:[0.12,0.25],additive:true});
       pushRewardFeed('INTERCEPT',bulletInterceptConfig.score,{color:'#fff1b8',icon:'✦',emphasis:true,life:.88});
       player.score+=bulletInterceptConfig.score;
+      interceptComboState.count++;
+      if(interceptComboState.count>=2){
+        interceptComboState.count=0;
+        addCombo(1,hit.midpoint,'COMBO','#fff1b8',{feedValue:'+1',life:.72,icon:'*'});
+      }
       player.shake=Math.max(player.shake,.08);
       audio.playRandom(whizSounds,.16);audio.play('ui_confirm',.06,false);
       break;
@@ -2460,7 +2506,11 @@ function updateBullets(dt){
     if(b.hostile){
       const d=b.pos.distanceTo(player.group.position);
       if(d<.9){damagePlayer(7);scene.remove(b.mesh);bullets.splice(i,1);if(!player.alive)break;continue;}
-      if(repair.active&&!b.nearChecked&&d>1.0&&d<2.35&&Math.abs(b.pos.z-player.group.position.z)<1.25){b.nearChecked=true;showNearMiss();}
+      if(!b.nearChecked&&!player.lastStand&&d>1.0&&d<2.55&&Math.abs(b.pos.z-player.group.position.z)<1.35){
+        b.nearChecked=true;
+        showNearMiss();
+        if(repair.active)repair.dangerRecent=Math.max(repair.dangerRecent,.9);
+      }
     }else{
       for(let mIdx=mines.length-1;mIdx>=0;mIdx--){
         const mine=mines[mIdx];

@@ -90,12 +90,24 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 #centerToast{
   position:fixed;top:31%;left:50%;z-index:9;pointer-events:none;
   transform:translate(-50%,-50%) scale(.94);opacity:0;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
   font-size:clamp(24px,3.3vw,46px);font-weight:900;letter-spacing:.08em;white-space:nowrap;
-  text-shadow:0 0 14px currentColor,0 0 34px rgba(255,191,64,.34);
   transition:opacity .12s ease,transform .12s ease,filter .12s ease;
 }
 #centerToast.show{opacity:1;transform:translate(-50%,-50%) scale(1);animation:centerToastPop .44s ease-out}
-#centerToast.cyan{text-shadow:0 0 16px currentColor,0 0 38px rgba(70,242,255,.46)}
+#centerToast.cyan .center-toast-text{text-shadow:0 0 16px currentColor,0 0 38px rgba(70,242,255,.46)}
+.center-toast-text{text-shadow:0 0 14px currentColor,0 0 34px rgba(255,191,64,.34)}
+.center-toast-crest{
+  width:clamp(52px,5.6vw,80px);height:auto;object-fit:contain;display:block;
+  filter:drop-shadow(0 0 8px currentColor) drop-shadow(0 0 18px rgba(255,210,122,.42));
+}
+#centerToast.cyan .center-toast-crest{filter:drop-shadow(0 0 9px rgba(150,250,255,.86)) drop-shadow(0 0 18px rgba(70,242,255,.36))}
+.center-toast-divider{
+  width:clamp(210px,24vw,360px);height:10px;object-fit:fill;display:block;opacity:.58;
+  filter:drop-shadow(0 0 7px currentColor);
+}
+#centerToast:not(.unlock) .center-toast-crest,
+#centerToast:not(.unlock) .center-toast-divider{display:none}
 
 #rewardFeed{
   position:fixed;top:58%;left:50%;z-index:8;pointer-events:none;
@@ -110,7 +122,12 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   opacity:0;animation:rewardLineFade var(--reward-life,.78s) ease-out forwards;
 }
 .reward-line .reward-icon{
-  min-width:13px;text-align:center;font-size:11px;color:currentColor;opacity:.95;
+  width:16px;min-width:16px;height:16px;display:grid;place-items:center;
+  text-align:center;font-size:11px;line-height:1;color:currentColor;opacity:.95;
+}
+.reward-line .reward-icon img{
+  width:15px;height:15px;object-fit:contain;display:block;
+  filter:drop-shadow(0 0 4px currentColor) drop-shadow(0 1px 2px rgba(0,0,0,.55));
 }
 .reward-line .reward-label{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;

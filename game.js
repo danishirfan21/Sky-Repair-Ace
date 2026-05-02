@@ -893,26 +893,52 @@ const weaponTiers=[
   {combo:0,id:'single',name:'Single Shot',rule:'Combo x0',duration:0,cd:.16,color:0xffdd88}
 ];
 function tierForCombo(c){return weaponTiers.find(t=>c>=t.combo)||weaponTiers.at(-1);}
-let centerToastEl=null,centerToastTimer=null;
-function centerToast(text,color='#ffd27a',duration=760,kind='warm'){
+let centerToastEl=null,centerToastTimer=null,centerToastTextEl=null,centerToastCrestEl=null,centerToastDividerEl=null;
+function centerToast(text,color='#ffd27a',duration=760,kind='warm',options={}){
   if(!centerToastEl){
     centerToastEl=document.createElement('div');
     centerToastEl.id='centerToast';
+    centerToastCrestEl=document.createElement('img');
+    centerToastCrestEl.className='center-toast-crest';
+    centerToastCrestEl.alt='';
+    centerToastCrestEl.decoding='async';
+    centerToastCrestEl.onerror=()=>{centerToastCrestEl.hidden=true;centerToastCrestEl.dataset.failed='true';};
+    centerToastTextEl=document.createElement('span');
+    centerToastTextEl.className='center-toast-text';
+    centerToastDividerEl=document.createElement('img');
+    centerToastDividerEl.className='center-toast-divider';
+    centerToastDividerEl.alt='';
+    centerToastDividerEl.decoding='async';
+    centerToastDividerEl.onerror=()=>{centerToastDividerEl.hidden=true;centerToastDividerEl.dataset.failed='true';};
+    centerToastEl.append(centerToastCrestEl,centerToastTextEl,centerToastDividerEl);
     document.body.appendChild(centerToastEl);
   }
   if(centerToastTimer)clearTimeout(centerToastTimer);
-  centerToastEl.className=`show ${kind}`;
-  centerToastEl.textContent=text;
+  const showUnlock=!!options.unlock;
+  centerToastEl.className=`show ${kind}${showUnlock?' unlock':''}`;
+  centerToastTextEl.textContent=text;
   centerToastEl.style.color=color;
+  centerToastCrestEl.hidden=!showUnlock||centerToastCrestEl.dataset.failed==='true';
+  centerToastDividerEl.hidden=!showUnlock||centerToastDividerEl.dataset.failed==='true';
+  if(showUnlock){
+    if(centerToastCrestEl.dataset.failed!=='true')centerToastCrestEl.src='/ui/rewards/unlock-crest.png';
+    if(centerToastDividerEl.dataset.failed!=='true')centerToastDividerEl.src='/ui/rewards/unlock-divider.png';
+  }
   centerToastTimer=setTimeout(()=>{
-    if(centerToastEl)centerToastEl.classList.remove('show');
+    if(centerToastEl){
+      centerToastEl.classList.remove('show','unlock');
+      if(centerToastCrestEl)centerToastCrestEl.hidden=true;
+      if(centerToastDividerEl)centerToastDividerEl.hidden=true;
+    }
     centerToastTimer=null;
   },duration);
 }
 function clearCenterToast(){
   if(centerToastTimer)clearTimeout(centerToastTimer);
   centerToastTimer=null;
-  if(centerToastEl)centerToastEl.classList.remove('show');
+  if(centerToastEl)centerToastEl.classList.remove('show','unlock');
+  if(centerToastCrestEl)centerToastCrestEl.hidden=true;
+  if(centerToastDividerEl)centerToastDividerEl.hidden=true;
 }
 function pulseWeaponPanel(tier){
   if(!ui.weapon)return;
@@ -933,7 +959,7 @@ function setWeaponFromCombo(combo){
     audio.play('ui_click',.12);
     if(tier.combo>0&&player.alive){
       pulseWeaponPanel(tier);
-      centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm');
+      centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm',{unlock:true});
     }
   }
   player.weapon=tier.id;player.weaponTimer=tier.duration;
@@ -1110,6 +1136,26 @@ ui.reticle=document.getElementById('aimReticle');
 const rewardFeedItems=[];
 const maxRewardFeedItems=5;
 const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT']);
+const rewardIconAssets={
+  'ENEMY HIT':'/ui/rewards/enemy-hit.png',
+  'HIT CHAIN':'/ui/rewards/combo.png',
+  'COMBO':'/ui/rewards/combo.png',
+  'KILL':'/ui/rewards/kill.png',
+  'NEAR MISS':'/ui/rewards/near-miss.png',
+  'INTERCEPT':'/ui/rewards/enemy-hit.png',
+  'GOOD REPAIR':'/ui/rewards/repair.png',
+  'PERFECT REPAIR':'/ui/rewards/repair.png',
+  'REPAIR INTERRUPTED':'/ui/rewards/repair.png'
+};
+const rewardIconFallbacks={
+  'HIT CHAIN':'✦',
+  'COMBO':'✦',
+  'KILL':'✦',
+  'NEAR MISS':'✦',
+  'INTERCEPT':'✦',
+  'PERFECT REPAIR':'✦',
+  'REPAIR INTERRUPTED':'!'
+};
 const enemyHitFeedState={pending:0,timer:null,lastShown:0,windowMs:320};
 function formatRewardValue(value){
   if(value===undefined||value===null||value==='')return '';
@@ -1156,7 +1202,18 @@ function pushRewardFeed(label,value,options={}){
 
   const icon=document.createElement('span');
   icon.className='reward-icon';
-  icon.textContent=options.icon || '';
+  const iconSrc=options.iconSrc ?? rewardIconAssets[label];
+  const fallbackIcon=options.icon ?? rewardIconFallbacks[label] ?? '';
+  icon.textContent=fallbackIcon;
+  if(iconSrc){
+    const iconImg=document.createElement('img');
+    iconImg.src=iconSrc;
+    iconImg.alt='';
+    iconImg.decoding='async';
+    iconImg.onerror=()=>{iconImg.remove();icon.textContent=fallbackIcon;};
+    icon.textContent='';
+    icon.appendChild(iconImg);
+  }
   const labelEl=document.createElement('span');
   labelEl.className='reward-label';
   labelEl.textContent=label;

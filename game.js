@@ -566,7 +566,7 @@ const aimNdc=new THREE.Vector2(),aimRaycaster=new THREE.Raycaster(),aimDir=new T
 const aimAssistProbe=new THREE.Vector3(),aimAssistDir=new THREE.Vector3();
 const aimAssistConfig={enabled:true,radius:.26,maxStrength:.58,stickTime:.2,farScale:.05};
 const aimAssistState={target:null,timer:0,active:false,strength:0};
-window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();});
+window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','KeyR'].includes(e.code))hideStartHint();});
 window.addEventListener('pointerdown',()=>ensureAudio(),{passive:true});
 window.addEventListener('keyup',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.delete(e.code);});
 const mouse={x:innerWidth/2,y:innerHeight/2,targetX:innerWidth/2,targetY:innerHeight/2,down:false};
@@ -601,7 +601,7 @@ window.addEventListener('mousemove',e=>{
 });
 renderer.domElement.addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
-  e.preventDefault();mouse.down=true;ensureAudio();
+  e.preventDefault();mouse.down=true;ensureAudio();hideStartHint();
 });
 window.addEventListener('pointerup',e=>{if(e.button===0)mouse.down=false;});
 window.addEventListener('pointercancel',()=>{mouse.down=false;});
@@ -1147,6 +1147,7 @@ function shootOne(offX,angle=0,color=currentTier().color,explosive=false){
   player.cameraKick = Math.max(player.cameraKick || 0, 0.13+feedbackState.flow*.035);
 }
 function fireWeapon(){
+  hideStartHint();
   const tier=currentTier();
   if(player.weapon==='dual'){shootOne(-.28);shootOne(.28);}
   else if(player.weapon==='spread'){[-.18,-.09,0,.09,.18].forEach((a,i)=>shootOne(i%2?-0.28:0.28,a));}
@@ -1166,13 +1167,107 @@ const ui={};
 ['hp','score','time','kills','nearCount','maxCombo','enemyCount','warn','nearMiss',
  'status','repairRing','repairIcon','flash','vignette','weaponName','weaponRule',
  'weapon','comboBadge','comboBadgeValue','comboBadgeLabel','comboCharge','rewardFeed',
+ 'hullBar','repairLabel','repairCompact','radarBlips','controls',
  'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
 ui.reticle=document.getElementById('aimReticle');
 
 const rewardFeedItems=[];
-const maxRewardFeedItems=5;
+const maxRewardFeedItems=3;
+const radarState={accum:0,interval:.1,nodes:[]};
+let startHintTimer=null;
+function syncCombatCluster(){
+  const hp=THREE.MathUtils.clamp(player.hp,0,100);
+  if(ui.hullBar){
+    ui.hullBar.style.width=hp+'%';
+    if(hp<30){
+      ui.hullBar.style.background='linear-gradient(90deg,rgba(255,75,47,.95),rgba(255,190,145,.86))';
+      ui.hullBar.style.boxShadow='0 0 7px rgba(255,75,47,.5)';
+    }else if(hp<55){
+      ui.hullBar.style.background='linear-gradient(90deg,rgba(255,201,92,.96),rgba(255,238,176,.86))';
+      ui.hullBar.style.boxShadow='0 0 6px rgba(255,201,92,.44)';
+    }else{
+      ui.hullBar.style.background='linear-gradient(90deg,rgba(73,229,242,.94),rgba(177,255,255,.86))';
+      ui.hullBar.style.boxShadow='0 0 5px rgba(70,242,255,.38)';
+    }
+  }
+  if(ui.repairLabel&&ui.repairCompact){
+    if(repair.active){
+      ui.repairLabel.textContent='REPAIRING';
+      ui.repairCompact.textContent='';
+      ui.repairCompact.style.display='none';
+      ui.repairCompact.classList.add('text-state');
+    }else if(repair.feedbackT>0&&repair.feedbackType==='interrupted'){
+      ui.repairLabel.textContent='COOLDOWN';
+      ui.repairCompact.textContent='';
+      ui.repairCompact.style.display='none';
+      ui.repairCompact.classList.add('text-state');
+    }else{
+      ui.repairLabel.textContent='REPAIR';
+      ui.repairCompact.textContent='R';
+      ui.repairCompact.style.display='';
+      ui.repairCompact.classList.remove('text-state');
+    }
+  }
+}
+function updateThreatRadar(dt){
+  if(!ui.radarBlips)return;
+  radarState.accum+=dt;
+  if(radarState.accum<radarState.interval)return;
+  radarState.accum=0;
+  const maxBlips=Math.min(enemies.length,8);
+  while(radarState.nodes.length<maxBlips){
+    const node=document.createElement('span');
+    node.className='radar-blip';
+    ui.radarBlips.appendChild(node);
+    radarState.nodes.push(node);
+  }
+  for(let i=0;i<radarState.nodes.length;i++){
+    const node=radarState.nodes[i];
+    const e=enemies[i];
+    if(i>=maxBlips||!e){
+      node.style.display='none';
+      continue;
+    }
+    const relX=e.group.position.x-player.group.position.x;
+    const relZ=e.group.position.z-player.group.position.z;
+    const range=82;
+    const radius=40;
+    let x=relX/range*radius;
+    let y=relZ/range*radius;
+    const mag=Math.hypot(x,y);
+    if(mag>radius-5){
+      const s=(radius-5)/mag;
+      x*=s;y*=s;
+    }
+    const dist=e.group.position.distanceTo(player.group.position);
+    node.style.display='block';
+    node.style.left=`${46+x}px`;
+    node.style.top=`${46+y}px`;
+    node.style.opacity=String(THREE.MathUtils.clamp(1-dist/105,.62,1));
+    node.classList.toggle('danger',dist<28);
+  }
+}
+function hideStartHint(){
+  if(startHintTimer)clearTimeout(startHintTimer);
+  startHintTimer=null;
+  if(!ui.controls)return;
+  ui.controls.classList.add('hidden');
+  ui.controls.classList.add('gone');
+}
+function restartStartHint(){
+  if(!ui.controls)return;
+  if(startHintTimer)clearTimeout(startHintTimer);
+  ui.controls.classList.remove('hidden','gone');
+  ui.controls.style.animation='none';
+  void ui.controls.offsetWidth;
+  ui.controls.style.animation='';
+  startHintTimer=setTimeout(hideStartHint,4000);
+}
+ui.controls?.addEventListener('animationend',e=>{
+  if(e.animationName==='startHintFade')hideStartHint();
+});
 const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','NEAR MISS','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT','WEAPON UNLOCK']);
 const rewardCueByLabel={
   'ENEMY HIT':'hit',
@@ -1431,6 +1526,7 @@ const repairRingCircumference=Math.PI*2*repairRingRadius;
 function repairAvailable(){return player.alive&&player.hp<100;}
 function startRepair(){
   if(repair.active||!repairAvailable())return;
+  hideStartHint();
   repair.active=true;
   repair.progress=0;
   repair.tookDamage=false;
@@ -1681,9 +1777,11 @@ function resetGame(){
   updatePlayerDamageVisuals(0);
   resetAimToCenter();
   player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);syncComboFeedback();
+  restartStartHint();
   if(ui.lastStand)ui.lastStand.classList.remove('show');for(let i=0;i<5;i++)spawnEnemy();
 }
 if(ui.restart)ui.restart.addEventListener('click',resetGame);
+restartStartHint();
 
 function updatePlayer(dt){
   if(!player.alive)return;
@@ -1962,6 +2060,7 @@ function updateUI(){
     ui.warn.style.opacity=critical?1:0;
     ui.warn.classList.toggle('active',critical);
   }
+  syncCombatCluster();
   updateReticleState();
   updateRepairIndicator();
 }
@@ -1975,7 +2074,7 @@ function animate(now=performance.now()){
     if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}
     dt*=timeScale;
   }
-  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateEnemies(dt);updateBullets(dt);updateCombatComboState(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateFeedbackState(dt);updateCamera(dt);environment.update(dt,player.survival);updateUI();
+  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateEnemies(dt);updateBullets(dt);updateCombatComboState(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateFeedbackState(dt);updateCamera(dt);environment.update(dt,player.survival);updateThreatRadar(dt);updateUI();
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

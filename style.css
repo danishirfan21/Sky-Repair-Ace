@@ -604,6 +604,8 @@ body.final-stand-active #vignette{
 }
 #card-inner h1{font-size:clamp(42px,8vw,78px);line-height:.9;margin:0 0 12px;color:#fff1c7;text-shadow:0 0 38px rgba(255,150,60,.75);letter-spacing:-.03em;font-weight:700}
 #resultLine{font-size:20px;opacity:.88;margin-bottom:22px;color:#ffd27a}
+.record-badges{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;min-height:0;margin:-8px 0 16px}
+.record-badge{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#151210;background:linear-gradient(135deg,#6ef7ff,#fff1b8);padding:7px 10px;box-shadow:0 0 18px rgba(110,247,255,.18);clip-path:polygon(7px 0,calc(100% - 7px) 0,100% 7px,100% calc(100% - 7px),calc(100% - 7px) 100%,7px 100%,0 calc(100% - 7px),0 7px)}
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:20px 0}
 .stat{padding:14px;background:rgba(181,166,66,.06);border:1px solid rgba(181,166,66,.2);clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0 calc(100% - 8px),0 8px)}
 .stat b{display:block;font-size:30px;color:#6ef7ff;text-shadow:0 0 10px rgba(70,242,255,.4)}

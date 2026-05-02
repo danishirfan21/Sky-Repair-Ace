@@ -967,6 +967,36 @@ function markMajorEvent(kind){
   if(kind==='escort')directorState.lastEscortAt=elapsed;
   if(kind==='supply')directorState.lastSupplyAt=elapsed;
 }
+function triggerJackpot(label,points,pos,{tier='legendary',chance=1}={}){
+  if(!player.alive||performance.now()/1000-jackpotState.lastAt<jackpotState.cooldown)return false;
+  if(Math.random()>chance)return false;
+  jackpotState.lastAt=performance.now()/1000;
+  jackpotState.cooldown=8+Math.random()*4;
+  player.score+=points;
+  pushRewardFeed(label,`+${points}`,{color:tier==='legendary'?'#fff1b8':'#9ffcff',icon:'*',emphasis:true,priority:tier==='legendary'?9:7,tier,cueType:tier==='legendary'?'unlock':'perfectRepair',forceCue:true,variant:false,streak:false});
+  addCombo(1,pos||player.group.position,null,'#fff1b8',{feed:false});
+  burstParticles(pos||player.group.position,{color:tier==='legendary'?0xfff1b8:0x9ffcff,count:tier==='legendary'?14:10,speed:12,size:[.035,.11],life:[.16,.38],additive:true});
+  player.cameraKick=Math.max(player.cameraKick||0,tier==='legendary'?.24:.16);
+  player.shake=Math.max(player.shake,tier==='legendary'?.15:.1);
+  if(tier==='legendary')freezeTimer=Math.max(freezeTimer,.045);
+  return true;
+}
+function maybeJackpot(kind,pos,detail={}){
+  if(kind==='nearMiss'){
+    if(repair.active||repair.dangerRecent>0)return triggerJackpot('ACE REFLEX',100,pos,{chance:.42});
+    if(player.hp<35)return triggerJackpot(player.hp<20?'CLUTCH THREAD':'PERFECT DODGE',player.hp<20?125:75,pos,{chance:.38});
+  }else if(kind==='perfectRepair'){
+    if(detail.danger||repair.dangerRecent>0)return triggerJackpot('MIRACLE REPAIR',150,pos,{chance:.68});
+  }else if(kind==='kill'){
+    const risky=player.hp<35&&(detail.enemyKind==='ace'||detail.enemyKind==='miniBoss');
+    const burst=directorState.kills.length>=3;
+    const finalStreak=player.lastStand&&runStats.finalStandKills>=2;
+    if(risky)return triggerJackpot('SKY ACE BONUS',150,pos,{chance:.58});
+    if(finalStreak)return triggerJackpot('CLUTCH THREAD',125,pos,{chance:.48});
+    if(burst)return triggerJackpot('SKY ACE BONUS',100,pos,{tier:'major',chance:.34});
+  }
+  return false;
+}
 function noteRunKill(kind='normal'){
   const now=performance.now()/1000;
   directorState.kills.push(now);
@@ -1947,6 +1977,7 @@ function setWeaponFromCombo(combo){
     const celebrate=tier.combo>0&&player.alive&&!unlockedWeaponTiersThisRun.has(tier.id);
     if(celebrate){
       unlockedWeaponTiersThisRun.add(tier.id);
+      unlockProgressState.lastUnlockAt=performance.now()/1000;
       flashScreen(special?.2:.16,special?'rgba(130,245,255,1)':'rgba(255,224,130,1)');
       player.cameraKick=Math.max(player.cameraKick||0,special?.38:.3);
       freezeTimer=Math.max(freezeTimer,dopamineConfig.enableWeaponUnlockCrest?(special?.08:.065):(special?.065:.055));
@@ -1968,6 +1999,19 @@ function setWeaponFromCombo(combo){
   if(ui.weaponRule)ui.weaponRule.textContent=tier.rule;
 }
 function currentTier(){return weaponTiers.find(t=>t.id===player.weapon)||weaponTiers.at(-1);}
+function maybePushUnlockProgress(){
+  if(!player.alive||player.combo<=0)return;
+  const now=performance.now()/1000;
+  if(now-unlockProgressState.lastAt<1.35||now-unlockProgressState.lastUnlockAt<1.25)return;
+  const progress=comboTierProgress(player.combo);
+  if(!progress.next||progress.progress<.55)return;
+  const needed=progress.next.combo-player.combo;
+  let label=`${Math.round(progress.progress*100)}% TO ${progress.next.name.toUpperCase().split(' ')[0]}`;
+  if(needed<=1)label=`ONE MORE FOR ${progress.next.name.toUpperCase().split(' ')[0]}`;
+  if(progress.next.id==='overdrive'&&progress.progress>=.72)label='OVERDRIVE NEAR';
+  unlockProgressState.lastAt=now;
+  pushRewardFeed(label,'',{color:'#fff1b8',icon:'*',life:.78,priority:3,tier:'minor',cue:false,variant:false,streak:false});
+}
 
 function updateAim(dt){
   const alpha=1-Math.exp(-dt*24);
@@ -2247,12 +2291,13 @@ function restartStartHint(){
 ui.controls?.addEventListener('animationend',e=>{
   if(e.animationName==='startHintFade')hideStartHint();
 });
-const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','NEAR MISS','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT','WEAPON UNLOCK','BOMBER DOWN','ACE DOWN','HEAVY DOWN','FINAL STAND','FINAL STAND KILL','OVERCHARGE','BARRAGE EVADED','SUPPLY CLAIMED','SUPPLY DROP','FRIENDLY ESCORT','FLAK BARRAGE','ESCORT ASSIST','NEW BEST COMBO','NEW KILL RECORD','FASTEST FIRST KILL']);
+const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','NEAR MISS','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT','WEAPON UNLOCK','BOMBER DOWN','ACE DOWN','HEAVY DOWN','FINAL STAND','FINAL STAND KILL','OVERCHARGE','BARRAGE EVADED','SUPPLY CLAIMED','SUPPLY DROP','FRIENDLY ESCORT','FLAK BARRAGE','ESCORT ASSIST','NEW BEST COMBO','NEW KILL RECORD','FASTEST FIRST KILL','PERFECT DODGE','ACE REFLEX','CLUTCH THREAD','MIRACLE REPAIR','SKY ACE BONUS']);
 const rewardPriorityTable={
   'FINAL STAND':10,'FINAL STAND KILL':10,
   'WEAPON UNLOCK':9,
   'HEAVY DOWN':8,'HEAVY FIGHTER INBOUND':8,
   'PERFECT REPAIR':7,'CLUTCH SAVE':7,'OVERCHARGE':7,
+  'PERFECT DODGE':9,'ACE REFLEX':9,'CLUTCH THREAD':9,'MIRACLE REPAIR':9,'SKY ACE BONUS':9,
   'BARRAGE EVADED':6,'SUPPLY CLAIMED':6,'ACE DOWN':6,'BOMBER DOWN':6,'NEW BEST COMBO':6,'NEW KILL RECORD':6,'FASTEST FIRST KILL':6,
   'KILL':5,'NEAR MISS':5,'FLAK BARRAGE':5,'FRIENDLY ESCORT':5,'SUPPLY DROP':5,'ACE APPROACHING':5,'BOMBER INBOUND':5,
   'COMBO':4,'HIT CHAIN':4,
@@ -2287,7 +2332,12 @@ const rewardCueByLabel={
   'SUPPLY CLAIMED':'repair',
   'NEW BEST COMBO':'combo',
   'NEW KILL RECORD':'combo',
-  'FASTEST FIRST KILL':'combo'
+  'FASTEST FIRST KILL':'combo',
+  'PERFECT DODGE':'unlock',
+  'ACE REFLEX':'unlock',
+  'CLUTCH THREAD':'unlock',
+  'MIRACLE REPAIR':'perfectRepair',
+  'SKY ACE BONUS':'unlock'
 };
 const rewardIconAssets={
   'ENEMY HIT':'/ui/rewards/enemy-hit.png',
@@ -2316,7 +2366,12 @@ const rewardIconAssets={
   'SUPPLY CLAIMED':'/ui/rewards/repair.png',
   'NEW BEST COMBO':'/ui/rewards/unlock-crest.png',
   'NEW KILL RECORD':'/ui/rewards/unlock-crest.png',
-  'FASTEST FIRST KILL':'/ui/rewards/unlock-crest.png'
+  'FASTEST FIRST KILL':'/ui/rewards/unlock-crest.png',
+  'PERFECT DODGE':'/ui/rewards/unlock-crest.png',
+  'ACE REFLEX':'/ui/rewards/unlock-crest.png',
+  'CLUTCH THREAD':'/ui/rewards/unlock-crest.png',
+  'MIRACLE REPAIR':'/ui/rewards/repair.png',
+  'SKY ACE BONUS':'/ui/rewards/unlock-crest.png'
 };
 const rewardIconFallbacks={
   'HIT CHAIN':'✦',
@@ -2333,23 +2388,96 @@ const rewardIconFallbacks={
 };
 const enemyHitFeedState={pending:0,timer:null,lastShown:0,windowMs:320};
 const rewardFeedPacingState={lastHighAt:0,timers:[]};
+const rewardVariantState={};
+const rewardStreakState={};
+const rewardCountUpTimers=new Set();
+const jackpotState={cooldown:4,lastAt:-99};
+const unlockProgressState={lastAt:0,lastUnlockAt:-99};
+const rewardAudioState={lastAt:0,lastTier:0};
+const rewardVariantGroups={
+  nearMiss:{labels:['NEAR MISS','THREAD THE NEEDLE','ACE REFLEX','DEATH DODGER','GHOST DODGE'],window:3.6},
+  kill:{labels:['KILL','CLEAN SHOT','TARGET DOWN','ACE HIT','SKY KILL'],window:3.4},
+  intercept:{labels:['INTERCEPT','BULLET CUT','THREAT DENIED','CLEAN DEFLECT'],window:3.4},
+  skim:{labels:['LOW SKIM','TERRAIN SKIM','GROUND RUSH','DANGER LOW'],window:3.5},
+  perfectRepair:{labels:['PERFECT REPAIR','FIELD MIRACLE','CLUTCH FIX','ENGINE SAVED'],window:3.8}
+};
+const rewardLabelType={
+  'NEAR MISS':'nearMiss',
+  'KILL':'kill',
+  'INTERCEPT':'intercept',
+  'LOW SKIM':'skim',
+  'TERRAIN SKIM':'skim',
+  'PERFECT REPAIR':'perfectRepair'
+};
+const rewardTierTable={
+  'ENEMY HIT':'minor','LOW SKIM':'minor','TERRAIN SKIM':'minor','INTERCEPT':'minor',
+  'KILL':'medium','NEAR MISS':'medium','HIT CHAIN':'medium','COMBO':'medium','ESCORT ASSIST':'medium',
+  'PERFECT REPAIR':'major','CLUTCH SAVE':'major','ACE DOWN':'major','BOMBER DOWN':'major','BARRAGE EVADED':'major','SUPPLY CLAIMED':'major','OVERCHARGE':'major',
+  'WEAPON UNLOCK':'legendary','HEAVY DOWN':'legendary','FINAL STAND':'legendary','FINAL STAND KILL':'legendary',
+  'NEW BEST COMBO':'legendary','NEW KILL RECORD':'legendary','FASTEST FIRST KILL':'legendary',
+  'PERFECT DODGE':'legendary','ACE REFLEX':'legendary','CLUTCH THREAD':'legendary','MIRACLE REPAIR':'legendary','SKY ACE BONUS':'legendary'
+};
+const rewardTierRank={minor:1,medium:2,major:3,legendary:4};
 function formatRewardValue(value){
   if(value===undefined||value===null||value==='')return '';
   if(typeof value==='number')return `${value>=0?'+':''}${value}`;
   return String(value);
 }
+function canonicalRewardLabel(label,options={}){
+  return options.canonicalLabel||label;
+}
+function rewardTypeFor(label,options={}){
+  return options.rewardType||rewardLabelType[canonicalRewardLabel(label,options)]||null;
+}
+function rewardTierFor(label,options={},priority=1){
+  if(options.tier)return options.tier;
+  const canonical=canonicalRewardLabel(label,options);
+  if(rewardTierTable[canonical])return rewardTierTable[canonical];
+  if(priority>=9)return 'legendary';
+  if(priority>=6)return 'major';
+  if(priority>=4)return 'medium';
+  return 'minor';
+}
+function prepareRewardPresentation(label,value,options={}){
+  const canonical=canonicalRewardLabel(label,options);
+  const type=rewardTypeFor(label,options);
+  let displayLabel=options.displayLabel||label;
+  let displayValue=value;
+  let streakCount=0;
+  const now=performance.now()/1000;
+  if(type&&rewardVariantGroups[type]&&options.variant!==false){
+    const group=rewardVariantGroups[type];
+    const state=rewardVariantState[type]||{lastAt:-99,count:0};
+    state.count=now-state.lastAt<=group.window?state.count+1:1;
+    state.lastAt=now;
+    rewardVariantState[type]=state;
+    if(state.count>1)displayLabel=group.labels[Math.min(group.labels.length-1,state.count-1)];
+  }
+  if(type&&type!=='enemyHit'&&options.streak!==false){
+    const state=rewardStreakState[type]||{lastAt:-99,count:0};
+    state.count=now-state.lastAt<=3.8?state.count+1:1;
+    state.lastAt=now;
+    rewardStreakState[type]=state;
+    streakCount=state.count;
+    if(streakCount>1&&displayValue!==undefined&&displayValue!==null&&displayValue!=='')displayValue=`${formatRewardValue(displayValue)} x${Math.min(9,streakCount)}`;
+  }
+  return {canonical,type,displayLabel,displayValue,streakCount};
+}
 function rewardPriorityFor(label,options={}){
-  const base=Number.isFinite(rewardPriorityTable[label])?rewardPriorityTable[label]:(options.emphasis?2:1);
+  const canonical=canonicalRewardLabel(label,options);
+  const base=Number.isFinite(rewardPriorityTable[canonical])?rewardPriorityTable[canonical]:(options.emphasis?2:1);
   return Number.isFinite(options.priority)?Math.max(base,options.priority):base;
 }
 function rewardLifeFor(label,options={},priority=1){
   const requested=options.life ?? options.duration;
-  const minLife=label==='ENEMY HIT'?.95:priority>=3||options.emphasis?1.48:1.18;
-  const preferred=label==='ENEMY HIT'?.98:priority>=3||options.emphasis?1.58:1.28;
+  const tier=rewardTierFor(label,options,priority);
+  const minLife=tier==='legendary'?1.45:tier==='major'?1.25:tier==='medium'?1.02:label==='ENEMY HIT'?.55:.72;
+  const preferred=tier==='legendary'?1.72:tier==='major'?1.42:tier==='medium'?1.16:label==='ENEMY HIT'?.62:.82;
   return Math.max(requested ?? preferred,minLife);
 }
 function removeRewardFeedItem(item){
   if(item.timer)clearTimeout(item.timer);
+  if(item.countCancel)item.countCancel();
   item.el?.remove();
   const idx=rewardFeedItems.indexOf(item);
   if(idx>=0)rewardFeedItems.splice(idx,1);
@@ -2377,10 +2505,66 @@ function makeRoomForReward(priority){
 function clearRewardFeedPacing(){
   rewardFeedPacingState.timers.splice(0).forEach(id=>clearTimeout(id));
   rewardFeedPacingState.lastHighAt=0;
+  rewardCountUpTimers.forEach(id=>cancelAnimationFrame(id));
+  rewardCountUpTimers.clear();
+  rewardAudioState.lastAt=0;
+  rewardAudioState.lastTier=0;
+}
+function resetRewardEmotionState(){
+  for(const key of Object.keys(rewardVariantState))delete rewardVariantState[key];
+  for(const key of Object.keys(rewardStreakState))delete rewardStreakState[key];
+  jackpotState.cooldown=4;
+  jackpotState.lastAt=-99;
+  unlockProgressState.lastAt=0;
+  unlockProgressState.lastUnlockAt=-99;
+  clearRewardFeedPacing();
+}
+function shouldCountUpReward(label,value,tier){
+  const canonical=canonicalRewardLabel(label,{});
+  if(!['major','legendary'].includes(tier)&&!['KILL','ACE DOWN','BOMBER DOWN'].includes(canonical))return false;
+  return typeof value==='string'&&/^\+\d+/.test(value);
+}
+function animateRewardValue(el,finalValue){
+  const match=String(finalValue).match(/^([+-])(\d+)(.*)$/);
+  if(!match){el.textContent=formatRewardValue(finalValue);return null;}
+  const sign=match[1],target=Number(match[2]),suffix=match[3]||'';
+  const start=performance.now();
+  const duration=210+Math.random()*50;
+  let frameId=null,stopped=false;
+  function step(now){
+    if(frameId!==null)rewardCountUpTimers.delete(frameId);
+    if(stopped)return;
+    const t=THREE.MathUtils.clamp((now-start)/duration,0,1);
+    const eased=1-Math.pow(1-t,3);
+    el.textContent=`${sign}${Math.round(target*eased)}${suffix}`;
+    if(t<1){
+      frameId=requestAnimationFrame(step);
+      rewardCountUpTimers.add(frameId);
+    }else{
+      el.textContent=`${sign}${target}${suffix}`;
+      frameId=null;
+    }
+  }
+  frameId=requestAnimationFrame(step);
+  rewardCountUpTimers.add(frameId);
+  return ()=>{stopped=true;if(frameId!==null){cancelAnimationFrame(frameId);rewardCountUpTimers.delete(frameId);frameId=null;}};
+}
+function playTieredRewardCue(cueType,tier,options={}){
+  const rank=rewardTierRank[tier]||1;
+  const now=performance.now()/1000;
+  if(now-rewardAudioState.lastAt<.2&&rank<=rewardAudioState.lastTier)return false;
+  rewardAudioState.lastAt=now;
+  rewardAudioState.lastTier=rank;
+  const cueOptions={force:rank>=3||options.forceCue,volume:options.cueVolume};
+  if(rank>=3){cueOptions.duck=true;cueOptions.duckAmount=rank>=4?.4:.28;cueOptions.duckTime=rank>=4?.42:.3;}
+  return playRewardCue(cueType,cueOptions);
 }
 function pushRewardFeed(label,value,options={}){
   if(!ui.rewardFeed||!label)return;
+  const prepared=prepareRewardPresentation(label,value,options);
+  const canonical=prepared.canonical;
   const priority=rewardPriorityFor(label,options);
+  const tier=rewardTierFor(canonical,options,priority);
   const now=performance.now();
   if(priority>=5&&!options._paced){
     const wait=Math.max(0,145-(now-rewardFeedPacingState.lastHighAt));
@@ -2398,17 +2582,18 @@ function pushRewardFeed(label,value,options={}){
   if(!makeRoomForReward(priority))return;
   directorState.lastRewardAt=performance.now()/1000;
   directorState.lullTimer=0;
-  const life=rewardLifeFor(label,options,priority);
+  const life=rewardLifeFor(canonical,options,priority);
   const line=document.createElement('div');
-  line.className=`reward-line${options.emphasis?' emphasis':''}${options.colorClass?' '+options.colorClass:''}`;
+  line.className=`reward-line tier-${tier}${options.emphasis||tier==='major'||tier==='legendary'?' emphasis':''}${prepared.streakCount>1?' streak':''}${options.colorClass?' '+options.colorClass:''}`;
+  if(prepared.streakCount>1)line.style.setProperty('--streak-glow',String(Math.min(1,.25+prepared.streakCount*.14)));
   if(options.color)line.style.color=options.color;
   if(options.color==='#9ffcff'||options.color==='#6ef7ff')line.classList.add('cyan');
   line.style.setProperty('--reward-life',`${life}s`);
 
   const icon=document.createElement('span');
   icon.className='reward-icon';
-  const iconSrc=options.iconSrc ?? rewardIconAssets[label];
-  const fallbackIcon=options.icon ?? rewardIconFallbacks[label] ?? '';
+  const iconSrc=options.iconSrc ?? rewardIconAssets[canonical];
+  const fallbackIcon=options.icon ?? rewardIconFallbacks[canonical] ?? '';
   icon.textContent=fallbackIcon;
   if(iconSrc){
     const iconImg=document.createElement('img');
@@ -2421,20 +2606,20 @@ function pushRewardFeed(label,value,options={}){
   }
   const labelEl=document.createElement('span');
   labelEl.className='reward-label';
-  labelEl.textContent=label;
+  labelEl.textContent=prepared.displayLabel;
   const valueEl=document.createElement('span');
   valueEl.className='reward-value';
-  valueEl.textContent=formatRewardValue(value);
+  valueEl.textContent=shouldCountUpReward(canonical,prepared.displayValue,tier)?'+0':formatRewardValue(prepared.displayValue);
 
   line.append(icon,labelEl,valueEl);
   ui.rewardFeed.appendChild(line);
-  const item={el:line,timer:null,priority,label,createdAt:performance.now()};
+  const item={el:line,timer:null,countCancel:null,priority,label:canonical,createdAt:performance.now()};
+  if(shouldCountUpReward(canonical,prepared.displayValue,tier))item.countCancel=animateRewardValue(valueEl,prepared.displayValue);
   item.timer=setTimeout(()=>removeRewardFeedItem(item),life*1000+80);
   rewardFeedItems.push(item);
-  const cueType=options.cueType ?? rewardCueByLabel[label];
+  const cueType=options.cueType ?? rewardCueByLabel[canonical];
   if(options.cue!==false&&cueType){
-    const forceCue=options.forceCue ?? (cueType==='kill'||cueType==='perfectRepair');
-    playRewardCue(cueType,{force:forceCue,volume:options.cueVolume});
+    playTieredRewardCue(cueType,tier,options);
   }
 }
 function flushEnemyHitRewardFeed(){
@@ -2513,6 +2698,7 @@ function addCombo(amount=1,pos=player.group.position,label='COMBO',color='#ffd27
   if(opts.feed!==false&&label)pushRewardFeed(label,opts.feedValue ?? amount,{color,icon:opts.icon,emphasis:opts.emphasis,life:opts.life});
   if(opts.float&&pos)floatingText(opts.floatText || label,pos,color,{fontSize:opts.fontSize || 24,life:opts.floatLife || .9,rise:opts.rise || 48});
   setWeaponFromCombo(player.combo);
+  maybePushUnlockProgress();
 }
 function registerEnemyHitCombo(pos){
   combatComboState.hitCount++;
@@ -2640,6 +2826,7 @@ function repairSuccess(perfect){
   playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
   audio.play(perfect?'repair_perfect':'repair_good',perfect?.28:.24);
   if(perfect){
+    const jackpotDanger=repair.dangerRecent>0||clutchPerfect;
     directorState.recentPerfect=7;
     pushRewardFeed('PERFECT REPAIR',`+${Math.round(heal)}`,{color:'#9ffcff',icon:'✦',emphasis:true,life:1.1});
     grantRepairOvercharge();
@@ -2654,6 +2841,7 @@ function repairSuccess(perfect){
     player.cameraKick=Math.max(player.cameraKick||0,.22);
     feedbackState.perfectGlow=1;
     feedbackState.perfectZoom=1;
+    maybeJackpot('perfectRepair',player.group.position.clone(),{danger:jackpotDanger});
     if(clutchPerfect){
       player.shake=Math.max(player.shake,.25);
       flashScreen(.22,'rgba(255,245,180,1)');
@@ -2784,6 +2972,8 @@ function showNearMiss(){
   if(slowTimer<=0.04)slowmo(.15,.58);
   player.shake=Math.max(player.shake,.16);
   setWeaponFromCombo(player.combo);
+  maybePushUnlockProgress();
+  maybeJackpot('nearMiss',player.group.position.clone());
 }
 function terrainSkimStreak(){
   const base=player.group.position.clone().add(new THREE.Vector3(0,-.45,.35));
@@ -2927,6 +3117,7 @@ function resetRunTransientState(){
   resetRunStats();
   resetLiveRecordState();
   cacheRunRecords();
+  resetRewardEmotionState();
   interceptComboState.count=0;
   player.lastStand=false;
   player.lastStandTimer=0;
@@ -2962,6 +3153,7 @@ function endGame(){
   clearEventCrest();
   clearCenterToast();
   clearRewardFeed();
+  resetRewardEmotionState();
   clearTutorialHint();
   clearMiniEvents();
   clearEventHazardBullets();
@@ -3327,6 +3519,7 @@ function updateBullets(dt){
             enemyDeathPayoff(killPos,kind,b.explosive);
             scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;
             noteRunKill(kind);
+            maybeJackpot('kill',killPos,{enemyKind:kind});
             freezeTimer=Math.max(freezeTimer,.058);
             if(slowTimer<=0.04)slowmo(.14,.68);
             const reward=kind==='miniBoss'?200:kind==='ace'?125:kind==='bomber'?100:50;

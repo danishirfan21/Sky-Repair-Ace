@@ -29,3 +29,29 @@ A high-octane Three.js flight combat and repair game.
 - **Space**: Fire
 - **R**: Hold to repair
 - **Shift**: Boost
+
+## Performance note
+
+Sky Repair Ace uses Three.js/WebGL, so performance depends heavily on your browser’s active GPU.
+
+On laptops with both Intel integrated graphics and NVIDIA/AMD dedicated graphics, Chrome may use the integrated GPU by default.
+
+For best performance on Windows:
+
+1. Open Windows Settings
+2. Go to System → Display → Graphics
+3. Add Google Chrome:
+   `C:\Program Files\Google\Chrome\Application\chrome.exe`
+4. Set it to High performance
+5. Restart Chrome
+6. Open `chrome://gpu`
+7. Check `GL_RENDERER`
+
+Recommended:
+`GL_RENDERER` should mention your NVIDIA/AMD GPU.
+
+Slower:
+`GL_RENDERER` mentions Intel integrated graphics.
+
+Bad:
+`GL_RENDERER` mentions SwiftShader or software rendering.

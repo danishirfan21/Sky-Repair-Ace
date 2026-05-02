@@ -761,6 +761,18 @@ const interceptComboState={count:0};
 const playerDamageFx={smokeTimer:0,sparkTimer:0,fireTimer:0};
 const specialEnemyState={bomberSpawned:false,aceSpawned:false,miniBossSpawned:false};
 const repairOvercharge={timer:0,duration:5};
+function specialSpawnCue(enemy,label,kind='warm'){
+  centerToast(label,kind==='cyan'?'#9ffcff':'#ffcf8a',720,kind);
+  pushRewardFeed(label,'',{color:kind==='cyan'?'#9ffcff':'#ffcf8a',icon:'!',emphasis:true,life:.92,cueType:'incomingFire'});
+  if(enemy){
+    enemy.warningTimer=1.35;
+    enemy.entryTimer=1.1;
+    burstParticles(enemy.group.position,{color:kind==='cyan'?0x9ffcff:0xffa24d,count:14,speed:10,size:[.035,.1],life:[.18,.42],additive:true});
+  }
+  player.cameraKick=Math.max(player.cameraKick||0,kind==='danger'?.28:.16);
+  if(kind==='danger')playRewardCue('unlock',{force:true,duck:true,duckAmount:.34});
+  else playRewardCue('incomingFire',{force:true});
+}
 function removeBulletAt(index){
   const b=bullets[index];
   if(!b)return;
@@ -925,16 +937,20 @@ function updateWaveDirector(dt){
   }
   if(dopamineConfig.enableAce&&!specialEnemyState.aceSpawned&&player.survival>18&&enemies.length<phase.max){
     specialEnemyState.aceSpawned=true;
-    spawnEnemy({kind:'ace',type:'swoop',zMin:-54,zMax:-72,aggression:1.22,fireDelay:.5});
+    const ace=spawnEnemy({kind:'ace',type:'swoop',zMin:-54,zMax:-72,aggression:1.22,fireDelay:.5});
+    specialSpawnCue(ace,'ACE APPROACHING','cyan');
   }
   if(dopamineConfig.enableBomber&&!specialEnemyState.bomberSpawned&&player.survival>28&&enemies.length<phase.max+1){
     specialEnemyState.bomberSpawned=true;
-    spawnEnemy({kind:'bomber',type:'straight',zMin:-62,zMax:-82,aggression:.82,fireDelay:1.1,xSpread:28});
+    const bomber=spawnEnemy({kind:'bomber',type:'straight',zMin:-62,zMax:-82,aggression:.82,fireDelay:1.1,xSpread:28});
+    specialSpawnCue(bomber,'BOMBER INBOUND','warm');
+    if(bomber)setTimeout(()=>{if(enemies.includes(bomber))spawnMine(bomber);},650);
   }
   if(dopamineConfig.enableMiniBoss&&!specialEnemyState.miniBossSpawned&&player.survival>46&&enemies.length<7){
     specialEnemyState.miniBossSpawned=true;
-    centerToast('HEAVY FIGHTER INBOUND','#ffcf8a',760,'warm');
-    spawnEnemy({kind:'miniBoss',type:'straight',zMin:-74,zMax:-88,aggression:1.05,fireDelay:.42,xSpread:20});
+    const heavy=spawnEnemy({kind:'miniBoss',type:'straight',zMin:-74,zMax:-88,aggression:1.05,fireDelay:.42,xSpread:20});
+    specialSpawnCue(heavy,'HEAVY FIGHTER INBOUND','danger');
+    eventCrest('HEAVY FIGHTER INBOUND',{sub:'BREAK FORMATION',kind:'danger',duration:980});
   }
 }
 updateWaveDirector(.016);
@@ -1127,7 +1143,11 @@ function enemyDeathPayoff(pos,kind='normal',explosive=false){
   const heavy=kind==='bomber'||kind==='ace'||kind==='miniBoss';
   explosion(pos,heavy||explosive);
   deathShockwave(pos,heavy?0xfff1a8:0xffd27a,heavy?1.65:1);
+  if(kind==='ace')deathShockwave(pos,0x9ffcff,1.45);
+  if(kind==='miniBoss')deathShockwave(pos,0xff6a2a,2.05);
   burstParticles(pos,{color:0xfff1a8,count:heavy?16:9,speed:heavy?24:18,size:[.035,.09],life:[.14,.36],gravity:2,drag:.9,additive:true});
+  if(kind==='ace')burstParticles(pos,{color:0x9ffcff,count:24,speed:18,size:[.03,.09],life:[.16,.38],additive:true});
+  if(kind==='bomber')burstParticles(pos,{color:0xff7a3d,count:22,speed:17,size:[.05,.14],life:[.2,.52],additive:true});
   burstParticles(pos,{color:0x3a3f46,count:heavy?8:4,speed:heavy?8:5,size:[.16,.34],life:[.38,.82],drag:.98,additive:false});
   if(heavy){
     const token=runToken;
@@ -1136,6 +1156,16 @@ function enemyDeathPayoff(pos,kind='normal',explosive=false){
       explosion(pos.clone().add(new THREE.Vector3((Math.random()-.5)*1.4,(Math.random()-.5)*.8,(Math.random()-.5)*1.4)),true);
       deathShockwave(pos,kind==='ace'?0x9ffcff:0xffa24d,1.2);
     },90+Math.random()*50);
+  }
+  if(kind==='miniBoss'){
+    eventCrest('HEAVY DOWN',{sub:'+200 TARGET DESTROYED',kind:'danger',duration:1120});
+    freezeTimer=Math.max(freezeTimer,.085);
+    slowmo(.24,.48);
+  }else if(kind==='ace'){
+    flashScreen(.16,'rgba(150,250,255,1)');
+    slowmo(.14,.54);
+  }else if(kind==='bomber'){
+    flashScreen(.14,'rgba(255,164,72,1)');
   }
 }
 function playerDamageLevel(){
@@ -1273,6 +1303,37 @@ function comboTierProgress(c){
   return {next,progress:THREE.MathUtils.clamp((c-base)/(next.combo-base || 1),0,1)};
 }
 const unlockedWeaponTiersThisRun=new Set();
+let eventCrestEl=null,eventCrestTimer=null,eventCrestTextEl=null,eventCrestIconEl=null,eventCrestSubEl=null;
+function eventCrest(text,{sub='',kind='warm',duration=1050,unlock=false}={}){
+  if(!eventCrestEl){
+    eventCrestEl=document.createElement('div');
+    eventCrestEl.id='eventCrest';
+    eventCrestIconEl=document.createElement('img');
+    eventCrestIconEl.className='event-crest-icon';
+    eventCrestIconEl.alt='';
+    eventCrestIconEl.decoding='async';
+    eventCrestIconEl.onerror=()=>{eventCrestIconEl.hidden=true;eventCrestEl?.classList.add('fallback');};
+    eventCrestTextEl=document.createElement('div');
+    eventCrestTextEl.className='event-crest-text';
+    eventCrestSubEl=document.createElement('div');
+    eventCrestSubEl.className='event-crest-sub';
+    eventCrestEl.append(eventCrestIconEl,eventCrestTextEl,eventCrestSubEl);
+    document.body.appendChild(eventCrestEl);
+  }
+  if(eventCrestTimer)clearTimeout(eventCrestTimer);
+  eventCrestEl.className=`show ${kind}${unlock?' unlock':''}`;
+  eventCrestTextEl.textContent=text;
+  eventCrestSubEl.textContent=sub;
+  eventCrestSubEl.hidden=!sub;
+  eventCrestIconEl.hidden=false;
+  eventCrestIconEl.src='/ui/rewards/unlock-crest.png';
+  eventCrestTimer=setTimeout(clearEventCrest,duration);
+}
+function clearEventCrest(){
+  if(eventCrestTimer)clearTimeout(eventCrestTimer);
+  eventCrestTimer=null;
+  if(eventCrestEl)eventCrestEl.classList.remove('show','unlock','cyan','warm','danger','fallback');
+}
 let centerToastEl=null,centerToastTimer=null,centerToastTextEl=null,centerToastCrestEl=null,centerToastDividerEl=null;
 function centerToast(text,color='#ffd27a',duration=760,kind='warm',options={}){
   if(!centerToastEl){
@@ -1343,8 +1404,11 @@ function setWeaponFromCombo(combo){
       pulseWeaponPanel(tier);
       playRewardCue('unlock',{force:true});
       pushRewardFeed('WEAPON UNLOCK',tier.name.toUpperCase(),{color:special?'#9ffcff':'#fff1b8',emphasis:true,life:1.18,forceCue:false});
-      if(dopamineConfig.enableWeaponUnlockCrest)centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',1040,special?'cyan':'warm',{unlock:true});
-      else centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm',{unlock:true});
+      if(dopamineConfig.enableWeaponUnlockCrest){
+        eventCrest(`${tier.name.toUpperCase()} UNLOCKED`,{sub:'WEAPON SYSTEM ONLINE',kind:special?'cyan':'warm',duration:1180,unlock:true});
+        slowmo(.16,.62);
+        flashScreen(.18,special?'rgba(130,245,255,1)':'rgba(255,224,130,1)');
+      }else centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm',{unlock:true});
     }else if(tier.combo>0&&player.alive){
       pulseWeaponPanel(tier);
     }
@@ -1525,6 +1589,14 @@ ui.overcharge=document.createElement('div');
 ui.overcharge.id='overchargeIndicator';
 ui.overcharge.textContent='OVERCHARGE';
 document.getElementById('hud')?.appendChild(ui.overcharge);
+ui.flow=document.createElement('div');
+ui.flow.id='flowIndicator';
+ui.flow.textContent='FLOW';
+document.getElementById('hud')?.appendChild(ui.flow);
+ui.finalStandCountdown=document.createElement('div');
+ui.finalStandCountdown.id='finalStandCountdown';
+ui.finalStandCountdown.textContent='FINAL STAND 3.0';
+document.getElementById('hud')?.appendChild(ui.finalStandCountdown);
 
 const rewardFeedItems=[];
 const maxRewardFeedItems=3;
@@ -1601,6 +1673,9 @@ function updateThreatRadar(dt){
     node.style.opacity=String(THREE.MathUtils.clamp(1-dist/105,.62,1));
     node.classList.toggle('danger',dist<28);
     node.classList.toggle('warning',(e.warningTimer||0)>0);
+    node.classList.toggle('ace',e.kind==='ace');
+    node.classList.toggle('bomber',e.kind==='bomber');
+    node.classList.toggle('heavy',e.kind==='miniBoss');
   }
 }
 function hideStartHint(){
@@ -2124,6 +2199,7 @@ function triggerLastStand(){
   if(ui.weaponName)ui.weaponName.textContent='OVERDRIVE STORM';
   if(ui.weaponRule)ui.weaponRule.textContent='Final stand';
   repairOvercharge.timer=0;
+  eventCrest('FINAL STAND',{sub:'OVERDRIVE UNTIL IMPACT',kind:'danger',duration:1220});
   centerToast('FINAL STAND','#ffcf8a',980,'warm');
   pushRewardFeed('FINAL STAND','3.0s',{color:'#ffcf8a',icon:'!',emphasis:true,life:1.15,cueType:'kill',forceCue:true});
   freezeTimer=Math.max(freezeTimer,.075);
@@ -2132,6 +2208,10 @@ function triggerLastStand(){
   player.cameraKick=Math.max(player.cameraKick||0,.5);
   flashScreen(.24,'rgba(255,85,32,1)');
   playRewardCue('unlock',{force:true,duck:true,duckAmount:.38});
+  if(ui.finalStandCountdown){
+    ui.finalStandCountdown.classList.add('active');
+    ui.finalStandCountdown.textContent='FINAL STAND 3.0';
+  }
   return true;
 }
 function damagePlayer(n){
@@ -2194,6 +2274,10 @@ function resetRunTransientState(){
   feedbackState.perfectGlow=0;
   feedbackState.perfectZoom=0;
   ui.overcharge?.classList.remove('active');
+  ui.flow?.classList.remove('active');
+  ui.finalStandCountdown?.classList.remove('active');
+  document.body.classList.remove('flow-state','final-stand-active');
+  clearEventCrest();
 }
 function endGame(){
   if(!player.alive)return;player.alive=false;endRepair();
@@ -2202,6 +2286,10 @@ function endGame(){
   repair.dangerRecent=0;
   repairOvercharge.timer=0;
   ui.overcharge?.classList.remove('active');
+  ui.flow?.classList.remove('active');
+  ui.finalStandCountdown?.classList.remove('active');
+  document.body.classList.remove('flow-state','final-stand-active');
+  clearEventCrest();
   clearCenterToast();
   clearRewardFeed();
   resetRewardCueState();
@@ -2289,7 +2377,13 @@ function updatePlayer(dt){
   if(!player.alive)return;
   if(player.lastStand){
     player.lastStandTimer=Math.max(0,player.lastStandTimer-dt);
+    if(ui.finalStandCountdown){
+      ui.finalStandCountdown.classList.add('active');
+      ui.finalStandCountdown.textContent=`FINAL STAND ${player.lastStandTimer.toFixed(1)}`;
+    }
     if(player.lastStandTimer<=0){endGame();return;}
+  }else if(ui.finalStandCountdown){
+    ui.finalStandCountdown.classList.remove('active');
   }
   updateOvercharge(dt);
   const ms=repair.active?7:15;const boost=keys.has('ShiftLeft')||keys.has('ShiftRight')?1.55:1;
@@ -2548,6 +2642,8 @@ function updateBullets(dt){
             const label=kind==='miniBoss'?'HEAVY DOWN':kind==='ace'?'ACE DOWN':kind==='bomber'?'BOMBER DOWN':'KILL';
             player.score+=reward-50+(player.lastStand?100:0);
             pushRewardFeed(label,`+${reward}`,{color:kind==='ace'?'#9ffcff':'#fff1b8',icon:'*',emphasis:true,life:kind==='normal'?1.08:1.42,forceCue:true});
+            if(kind==='ace')centerToast('ACE DOWN','#9ffcff',680,'cyan');
+            if(kind==='bomber')centerToast('BOMBER DOWN','#ffcf8a',720,'warm');
             if(player.lastStand)pushRewardFeed('FINAL STAND KILL','+100',{color:'#ffcf8a',icon:'!',emphasis:true,life:1.05,cueType:'kill'});
             const comboGain=kind==='miniBoss'?3:kind==='bomber'||kind==='ace'?2:1;
             addCombo(comboGain,null,'COMBO','#ffd27a',{feedValue:`+${comboGain}`,life:.98,emphasis:true});
@@ -2595,6 +2691,7 @@ function updateFeedbackState(dt){
   feedbackState.nearMissZoom=Math.max(0,feedbackState.nearMissZoom-dt*4.2);
   const flowTarget=dopamineConfig.enableFlowState?THREE.MathUtils.clamp((player.combo-4)/8,0,1):0;
   feedbackState.flow=THREE.MathUtils.lerp(feedbackState.flow,flowTarget,1-Math.exp(-dt*3.2));
+  if(ui.flow)ui.flow.classList.toggle('active',feedbackState.flow>.45);
 
   const heartbeat=.55+.45*Math.sin(feedbackState.pulse*Math.PI*2);
   const panic=feedbackState.critical*(.72+.28*heartbeat);
@@ -2604,7 +2701,9 @@ function updateFeedbackState(dt){
   }
   const redTint=feedbackState.critical;
   const flowLift=feedbackState.flow*.08+feedbackState.perfectGlow*.1;
-  renderer.domElement.style.filter=`saturate(${1-redTint*.3+flowLift}) sepia(${redTint*.12}) hue-rotate(${redTint*-6}deg) brightness(${1-redTint*.07+flowLift})`;
+  renderer.domElement.style.filter=`saturate(${1-redTint*.3+flowLift}) sepia(${redTint*.12}) hue-rotate(${redTint*-6+feedbackState.flow*2}deg) brightness(${1-redTint*.07+flowLift})`;
+  document.body.classList.toggle('flow-state',feedbackState.flow>.38);
+  document.body.classList.toggle('final-stand-active',!!player.lastStand);
 }
 function updateCamera(dt){
   const base=player.group.position.clone().add(new THREE.Vector3(0,3.7,11));

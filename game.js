@@ -1892,6 +1892,23 @@ function damagePlayer(n){
   if(player.hp<30&&now-audioTimers.criticalBeep>1.15){audio.play('critical_beep',.22);audioTimers.criticalBeep=now;}
   if(player.hp<=0)endGame();
 }
+function resetRunTransientState(){
+  waveDirector.opened=false;
+  waveDirector.spawnTimer=0;
+  waveDirector.burstTimer=0;
+  waveDirector.lastPhase=-1;
+
+  unlockedWeaponTiersThisRun.clear();
+
+  audioMix.duck=0;
+  audioMix.duckTimer=0;
+
+  feedbackState.nearMissZoom=0;
+  feedbackState.comboPulse=0;
+  feedbackState.flow=0;
+  feedbackState.perfectGlow=0;
+  feedbackState.perfectZoom=0;
+}
 function endGame(){
   if(!player.alive)return;player.alive=false;endRepair();
   repair.feedbackT=0;
@@ -1909,6 +1926,8 @@ function endGame(){
   audio.stopLoop('music_base_loop');
   audio.setLoopPlaybackRate('engine_loop',1);
   audio.setLoopPlaybackRate('engine_damaged_loop',1);
+  audioMix.duck=0;
+  audioMix.duckTimer=0;
   audio.setLoopVolume('music_elevenlabs_loop',musicVolumeConfig.gameOver);
   releaseMouseCapture();
   if(ui.finalTime)ui.finalTime.textContent=player.survival.toFixed(1)+'s';
@@ -1936,8 +1955,6 @@ function resetGame(){
   audioTimers.enemyShot=0;
   audioMix.damagedEngine=0;
   audioMix.music=musicVolumeConfig.gameplay;
-  audioMix.duck=0;
-  audioMix.duckTimer=0;
   audio.setLoopPlaybackRate('engine_loop',1);
   audio.setLoopPlaybackRate('engine_damaged_loop',1);
   if(audio.unlocked){
@@ -1955,13 +1972,13 @@ function resetGame(){
   scorePopups.splice(0).forEach(p=>p.el.remove());
   ambientTracerTimer = 0;
   nextGunSide = -1;
-  Object.assign(waveDirector,{spawnTimer:0,burstTimer:0,opened:false,lastPhase:-1});
-  unlockedWeaponTiersThisRun.clear();
+  resetRunTransientState();
   Object.assign(aimAssistState,{target:null,timer:0,active:false,strength:0});
   Object.assign(playerDamageFx,{smokeTimer:0,sparkTimer:0,fireTimer:0});
   resetCombatComboState();
   Object.assign(player,{hp:100,score:0,combo:0,maxCombo:0,weapon:'single',weaponTimer:0,fireCd:0,shake:0,cameraKick:0,kills:0,nearMisses:0,alive:true,startTime:performance.now(),survival:0});
-  Object.assign(feedbackState,{critical:0,pulse:0,perfectGlow:0,perfectZoom:0,comboPulse:0,flow:0,nearMissZoom:0});
+  feedbackState.critical=0;
+  feedbackState.pulse=0;
   freezeTimer=0;timeScale=1;slowTimer=0;
   updatePlayerDamageVisuals(0);
   resetAimToCenter();

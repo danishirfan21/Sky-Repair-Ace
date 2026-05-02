@@ -31,3 +31,6 @@ yarn-error.log*
 
 # Runtime screenshots
 runtime-*.png
+
+# Vite logs
+vite-dev*.log

@@ -166,9 +166,46 @@ const audio=createAudioManager({
   bullet_whiz_02:'audio/weapons/bullet_whiz_02.mp3',
   enemy_mg_burst_01:'audio/weapons/enemy_mg_burst_01.mp3',
   mg_burst_01:'audio/weapons/mg_burst_01.mp3',
-  mg_overdrive_loop:'audio/weapons/mg_overdrive_loop.mp3'
+  mg_overdrive_loop:'audio/weapons/mg_overdrive_loop.mp3',
+  reward_enemy_hit:'audio/rewards/enemy_hit.mp3',
+  reward_hit_chain:'audio/rewards/hit_chain.mp3',
+  reward_kill_confirm:'audio/rewards/kill_confirm.mp3',
+  reward_combo_increase:'audio/rewards/combo_increase.mp3',
+  reward_near_miss:'audio/rewards/near_miss_reward.mp3',
+  reward_repair:'audio/rewards/repair_reward.mp3',
+  reward_perfect_repair:'audio/rewards/perfect_repair.mp3',
+  reward_weapon_unlock:'audio/rewards/weapon_unlock_stinger.mp3',
+  reward_incoming_fire:'audio/rewards/incoming_enemy_fire_cue.mp3',
+  reward_bullet_intercept:'audio/rewards/bullet_intercept_reward.mp3',
+  reward_combo_broken:'audio/rewards/combo_broken.mp3'
 });
 const audioTimers={shot:0,enemyShot:0,hitConfirm:0,hitMetal:0,repairTick:0,criticalBeep:0};
+const rewardCueIds={
+  hit:'reward_enemy_hit',
+  chain:'reward_hit_chain',
+  kill:'reward_kill_confirm',
+  combo:'reward_combo_increase',
+  nearMiss:'reward_near_miss',
+  repair:'reward_repair',
+  perfectRepair:'reward_perfect_repair',
+  unlock:'reward_weapon_unlock',
+  incomingFire:'reward_incoming_fire',
+  intercept:'reward_bullet_intercept',
+  comboBroken:'reward_combo_broken'
+};
+const rewardCueVolumes={hit:.11,chain:.16,kill:.24,combo:.13,nearMiss:.18,repair:.16,perfectRepair:.24,unlock:.24,incomingFire:.13,intercept:.17,comboBroken:.15};
+const rewardCueThrottle={hit:.22,chain:.26,combo:.3,nearMiss:.34,repair:.42,incomingFire:1.15,intercept:.28,comboBroken:.42};
+const rewardCueLast={};
+function playRewardCue(type,options={}){
+  const id=rewardCueIds[type];
+  if(!id)return false;
+  const now=performance.now()/1000;
+  if(type==='combo'&&now-(rewardCueLast.kill||0)<.36)return false;
+  const throttle=rewardCueThrottle[type]??.24;
+  if(!options.force&&now-(rewardCueLast[type]||0)<throttle)return false;
+  rewardCueLast[type]=now;
+  return audio.play(id,options.volume ?? rewardCueVolumes[type] ?? .15,false);
+}
 const musicVolumeConfig={
   gameplay:0.55,
   critical:0.68,
@@ -893,26 +930,52 @@ const weaponTiers=[
   {combo:0,id:'single',name:'Single Shot',rule:'Combo x0',duration:0,cd:.16,color:0xffdd88}
 ];
 function tierForCombo(c){return weaponTiers.find(t=>c>=t.combo)||weaponTiers.at(-1);}
-let centerToastEl=null,centerToastTimer=null;
-function centerToast(text,color='#ffd27a',duration=760,kind='warm'){
+let centerToastEl=null,centerToastTimer=null,centerToastTextEl=null,centerToastCrestEl=null,centerToastDividerEl=null;
+function centerToast(text,color='#ffd27a',duration=760,kind='warm',options={}){
   if(!centerToastEl){
     centerToastEl=document.createElement('div');
     centerToastEl.id='centerToast';
+    centerToastCrestEl=document.createElement('img');
+    centerToastCrestEl.className='center-toast-crest';
+    centerToastCrestEl.alt='';
+    centerToastCrestEl.decoding='async';
+    centerToastCrestEl.onerror=()=>{centerToastCrestEl.hidden=true;centerToastCrestEl.dataset.failed='true';};
+    centerToastTextEl=document.createElement('span');
+    centerToastTextEl.className='center-toast-text';
+    centerToastDividerEl=document.createElement('img');
+    centerToastDividerEl.className='center-toast-divider';
+    centerToastDividerEl.alt='';
+    centerToastDividerEl.decoding='async';
+    centerToastDividerEl.onerror=()=>{centerToastDividerEl.hidden=true;centerToastDividerEl.dataset.failed='true';};
+    centerToastEl.append(centerToastCrestEl,centerToastTextEl,centerToastDividerEl);
     document.body.appendChild(centerToastEl);
   }
   if(centerToastTimer)clearTimeout(centerToastTimer);
-  centerToastEl.className=`show ${kind}`;
-  centerToastEl.textContent=text;
+  const showUnlock=!!options.unlock;
+  centerToastEl.className=`show ${kind}${showUnlock?' unlock':''}`;
+  centerToastTextEl.textContent=text;
   centerToastEl.style.color=color;
+  centerToastCrestEl.hidden=!showUnlock||centerToastCrestEl.dataset.failed==='true';
+  centerToastDividerEl.hidden=!showUnlock||centerToastDividerEl.dataset.failed==='true';
+  if(showUnlock){
+    if(centerToastCrestEl.dataset.failed!=='true')centerToastCrestEl.src='/ui/rewards/unlock-crest.png';
+    if(centerToastDividerEl.dataset.failed!=='true')centerToastDividerEl.src='/ui/rewards/unlock-divider.png';
+  }
   centerToastTimer=setTimeout(()=>{
-    if(centerToastEl)centerToastEl.classList.remove('show');
+    if(centerToastEl){
+      centerToastEl.classList.remove('show','unlock');
+      if(centerToastCrestEl)centerToastCrestEl.hidden=true;
+      if(centerToastDividerEl)centerToastDividerEl.hidden=true;
+    }
     centerToastTimer=null;
   },duration);
 }
 function clearCenterToast(){
   if(centerToastTimer)clearTimeout(centerToastTimer);
   centerToastTimer=null;
-  if(centerToastEl)centerToastEl.classList.remove('show');
+  if(centerToastEl)centerToastEl.classList.remove('show','unlock');
+  if(centerToastCrestEl)centerToastCrestEl.hidden=true;
+  if(centerToastDividerEl)centerToastDividerEl.hidden=true;
 }
 function pulseWeaponPanel(tier){
   if(!ui.weapon)return;
@@ -933,7 +996,8 @@ function setWeaponFromCombo(combo){
     audio.play('ui_click',.12);
     if(tier.combo>0&&player.alive){
       pulseWeaponPanel(tier);
-      centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm');
+      playRewardCue('unlock',{force:true});
+      centerToast(`${tier.name.toUpperCase()} UNLOCKED`,special?'#9ffcff':'#ffd27a',780,special?'cyan':'warm',{unlock:true});
     }
   }
   player.weapon=tier.id;player.weaponTimer=tier.duration;
@@ -1101,11 +1165,164 @@ function fireWeapon(){
 const ui={};
 ['hp','score','time','kills','nearCount','maxCombo','enemyCount','warn','nearMiss',
  'status','repairRing','repairIcon','flash','vignette','weaponName','weaponRule',
- 'weapon','comboBadge','comboBadgeValue','comboBadgeLabel','comboCharge',
+ 'weapon','comboBadge','comboBadgeValue','comboBadgeLabel','comboCharge','rewardFeed',
  'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
 ui.reticle=document.getElementById('aimReticle');
+
+const rewardFeedItems=[];
+const maxRewardFeedItems=5;
+const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','NEAR MISS','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT','WEAPON UNLOCK']);
+const rewardCueByLabel={
+  'ENEMY HIT':'hit',
+  'HIT CHAIN':'chain',
+  'KILL':'kill',
+  'COMBO':'combo',
+  'NEAR MISS':'nearMiss',
+  'INTERCEPT':'intercept',
+  'GOOD REPAIR':'repair',
+  'PERFECT REPAIR':'perfectRepair',
+  'REPAIR INTERRUPTED':'comboBroken'
+};
+const rewardIconAssets={
+  'ENEMY HIT':'/ui/rewards/enemy-hit.png',
+  'HIT CHAIN':'/ui/rewards/combo.png',
+  'COMBO':'/ui/rewards/combo.png',
+  'KILL':'/ui/rewards/kill.png',
+  'NEAR MISS':'/ui/rewards/near-miss.png',
+  'INTERCEPT':'/ui/rewards/enemy-hit.png',
+  'GOOD REPAIR':'/ui/rewards/repair.png',
+  'PERFECT REPAIR':'/ui/rewards/repair.png',
+  'REPAIR INTERRUPTED':'/ui/rewards/repair.png'
+};
+const rewardIconFallbacks={
+  'HIT CHAIN':'✦',
+  'COMBO':'✦',
+  'KILL':'✦',
+  'NEAR MISS':'✦',
+  'INTERCEPT':'✦',
+  'PERFECT REPAIR':'✦',
+  'REPAIR INTERRUPTED':'!'
+};
+const enemyHitFeedState={pending:0,timer:null,lastShown:0,windowMs:320};
+function formatRewardValue(value){
+  if(value===undefined||value===null||value==='')return '';
+  if(typeof value==='number')return `${value>=0?'+':''}${value}`;
+  return String(value);
+}
+function rewardPriorityFor(label,options={}){
+  if(Number.isFinite(options.priority))return options.priority;
+  if(label==='ENEMY HIT')return 0;
+  if(highPriorityRewardLabels.has(label))return 3;
+  return options.emphasis?2:1;
+}
+function rewardLifeFor(label,options={},priority=1){
+  const requested=options.life ?? options.duration;
+  const minLife=label==='ENEMY HIT'?.95:priority>=3||options.emphasis?1.48:1.18;
+  const preferred=label==='ENEMY HIT'?.98:priority>=3||options.emphasis?1.58:1.28;
+  return Math.max(requested ?? preferred,minLife);
+}
+function removeRewardFeedItem(item){
+  if(item.timer)clearTimeout(item.timer);
+  item.el?.remove();
+  const idx=rewardFeedItems.indexOf(item);
+  if(idx>=0)rewardFeedItems.splice(idx,1);
+}
+function makeRoomForReward(priority){
+  if(rewardFeedItems.length<maxRewardFeedItems)return true;
+  let lowestIdx=0;
+  let lowestPriority=rewardFeedItems[0]?.priority ?? 1;
+  for(let i=1;i<rewardFeedItems.length;i++){
+    const itemPriority=rewardFeedItems[i]?.priority ?? 1;
+    if(itemPriority<lowestPriority){
+      lowestPriority=itemPriority;
+      lowestIdx=i;
+    }
+  }
+  if(priority<lowestPriority)return false;
+  removeRewardFeedItem(rewardFeedItems[lowestIdx]);
+  return true;
+}
+function pushRewardFeed(label,value,options={}){
+  if(!ui.rewardFeed||!label)return;
+  const priority=rewardPriorityFor(label,options);
+  if(!makeRoomForReward(priority))return;
+  const life=rewardLifeFor(label,options,priority);
+  const line=document.createElement('div');
+  line.className=`reward-line${options.emphasis?' emphasis':''}${options.colorClass?' '+options.colorClass:''}`;
+  if(options.color)line.style.color=options.color;
+  if(options.color==='#9ffcff'||options.color==='#6ef7ff')line.classList.add('cyan');
+  line.style.setProperty('--reward-life',`${life}s`);
+
+  const icon=document.createElement('span');
+  icon.className='reward-icon';
+  const iconSrc=options.iconSrc ?? rewardIconAssets[label];
+  const fallbackIcon=options.icon ?? rewardIconFallbacks[label] ?? '';
+  icon.textContent=fallbackIcon;
+  if(iconSrc){
+    const iconImg=document.createElement('img');
+    iconImg.src=iconSrc;
+    iconImg.alt='';
+    iconImg.decoding='async';
+    iconImg.onerror=()=>{iconImg.remove();icon.textContent=fallbackIcon;};
+    icon.textContent='';
+    icon.appendChild(iconImg);
+  }
+  const labelEl=document.createElement('span');
+  labelEl.className='reward-label';
+  labelEl.textContent=label;
+  const valueEl=document.createElement('span');
+  valueEl.className='reward-value';
+  valueEl.textContent=formatRewardValue(value);
+
+  line.append(icon,labelEl,valueEl);
+  ui.rewardFeed.appendChild(line);
+  const item={el:line,timer:null,priority,label};
+  item.timer=setTimeout(()=>removeRewardFeedItem(item),life*1000+80);
+  rewardFeedItems.push(item);
+  const cueType=options.cueType ?? rewardCueByLabel[label];
+  if(options.cue!==false&&cueType){
+    const forceCue=options.forceCue ?? (cueType==='kill'||cueType==='perfectRepair');
+    playRewardCue(cueType,{force:forceCue,volume:options.cueVolume});
+  }
+}
+function flushEnemyHitRewardFeed(){
+  if(enemyHitFeedState.timer){
+    clearTimeout(enemyHitFeedState.timer);
+    enemyHitFeedState.timer=null;
+  }
+  const count=enemyHitFeedState.pending;
+  enemyHitFeedState.pending=0;
+  if(count<=0)return;
+  enemyHitFeedState.lastShown=performance.now();
+  pushRewardFeed('ENEMY HIT',count,{color:'#f8fbff',life:.58,priority:0});
+}
+function pushEnemyHitReward(amount=1){
+  enemyHitFeedState.pending+=amount;
+  const now=performance.now();
+  const wait=Math.max(0,enemyHitFeedState.windowMs-(now-enemyHitFeedState.lastShown));
+  if(wait<=0&&!enemyHitFeedState.timer){
+    flushEnemyHitRewardFeed();
+    return;
+  }
+  if(!enemyHitFeedState.timer){
+    enemyHitFeedState.timer=setTimeout(flushEnemyHitRewardFeed,wait);
+  }
+}
+function clearPendingEnemyHitReward(){
+  if(enemyHitFeedState.timer)clearTimeout(enemyHitFeedState.timer);
+  enemyHitFeedState.timer=null;
+  enemyHitFeedState.pending=0;
+  enemyHitFeedState.lastShown=0;
+}
+function clearRewardFeed(){
+  clearPendingEnemyHitReward();
+  rewardFeedItems.splice(0).forEach(item=>{
+    if(item.timer)clearTimeout(item.timer);
+    item.el?.remove();
+  });
+}
 
 function pulseComboBadge(){
   feedbackState.comboPulse=.22;
@@ -1133,12 +1350,13 @@ function resetCombatComboState(){
   combatComboState.hitCount=0;
   combatComboState.hitTimer=0;
 }
-function addCombo(amount=1,pos=player.group.position,label='+1 COMBO',color='#ffd27a'){
+function addCombo(amount=1,pos=player.group.position,label='COMBO',color='#ffd27a',opts={}){
   player.combo=Math.max(0,player.combo)+amount;
   player.maxCombo=Math.max(player.maxCombo,player.combo);
   syncComboFeedback();
   pulseComboBadge();
-  if(pos)floatingText(label,pos,color,{fontSize:24,life:.9,rise:48});
+  if(opts.feed!==false&&label)pushRewardFeed(label,opts.feedValue ?? amount,{color,icon:opts.icon,emphasis:opts.emphasis,life:opts.life});
+  if(opts.float&&pos)floatingText(opts.floatText || label,pos,color,{fontSize:opts.fontSize || 24,life:opts.floatLife || .9,rise:opts.rise || 48});
   setWeaponFromCombo(player.combo);
 }
 function registerEnemyHitCombo(pos){
@@ -1146,7 +1364,7 @@ function registerEnemyHitCombo(pos){
   combatComboState.hitTimer=1.5;
   if(combatComboState.hitCount>=3){
     combatComboState.hitCount=0;
-    addCombo(1,pos,'HIT CHAIN +1','#9ffcff');
+    addCombo(1,null,'HIT CHAIN','#9ffcff',{feedValue:'+1',icon:'✦',life:.82});
     pulseReticleChain();
     player.cameraKick=Math.max(player.cameraKick||0,.08);
     player.shake=Math.max(player.shake,.035);
@@ -1242,7 +1460,7 @@ function repairSuccess(perfect){
   repair.feedbackType=perfect?'perfect':'good';
   const heal=perfect?38+Math.min(18,player.combo*1.5):24+Math.min(12,player.combo*.8);
   player.hp=Math.min(100,player.hp+heal);
-  if(perfect)addCombo(1,player.group.position.clone().add(new THREE.Vector3(0,1.28,.25)),'+1 COMBO','#9ffcff');
+  if(perfect)addCombo(1,null,'COMBO','#9ffcff',{feedValue:'+1',icon:'✦',emphasis:true,life:.96});
   else syncComboFeedback();
   if(ui.status)ui.status.textContent=perfect?'PERFECT REPAIR':'GOOD REPAIR';
   particle(player.group.position.clone().add(new THREE.Vector3(0,0,.4)),perfect?0x66f7ff:0x6ef7ff,perfect?12:7);
@@ -1252,6 +1470,8 @@ function repairSuccess(perfect){
   playerDamageFx.smokeTimer=Math.max(playerDamageFx.smokeTimer,.35);
   audio.play(perfect?'repair_perfect':'repair_good',perfect?.28:.24);
   if(perfect){
+    pushRewardFeed('PERFECT REPAIR',`+${Math.round(heal)}`,{color:'#9ffcff',icon:'✦',emphasis:true,life:1.1});
+    centerToast('PERFECT REPAIR', '#9ffcff', 760, 'cyan');
     freezeTimer=.045;
     slowmo(.42,.38);
     flashScreen(.62,'rgba(205,255,255,1)');
@@ -1263,10 +1483,11 @@ function repairSuccess(perfect){
     if(clutchPerfect){
       player.shake=Math.max(player.shake,.25);
       flashScreen(.22,'rgba(255,245,180,1)');
+      pushRewardFeed('CLUTCH SAVE','',{color:'#fff1b8',icon:'!',emphasis:true,life:1.05});
       centerToast('CLUTCH SAVE', '#fff1b8', 760, 'warm');
     }
   }else{
-    floatingText('GOOD REPAIR',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#9ffcff');
+    pushRewardFeed('GOOD REPAIR',`+${Math.round(heal)}`,{color:'#9ffcff',life:.85});
   }
 }
 function cancelRepair(){
@@ -1285,7 +1506,7 @@ function interruptRepair(){
   resetComboFeedback();
   resetCombatComboState();
   if(ui.status)ui.status.textContent='REPAIR INTERRUPTED';
-  floatingText('REPAIR INTERRUPTED',player.group.position.clone().add(new THREE.Vector3(0,1.15,.25)),'#ff7a3d');
+  pushRewardFeed('REPAIR INTERRUPTED','',{color:'#ff7a3d',icon:'!',emphasis:true,life:.9});
   player.shake=.35;
   audio.play('repair_fail',.28);
   particle(player.group.position,0xff4b2f,10);
@@ -1339,7 +1560,7 @@ function nearMissStreak(pos) {
 function showNearMiss(){
   player.nearMisses++;player.score+=25;player.combo=Math.max(player.combo,0)+1;
   player.maxCombo=Math.max(player.maxCombo,player.combo);
-  if(ui.nearMiss){ui.nearMiss.classList.add('show');ui.nearMiss.textContent='NEAR MISS +25';setTimeout(()=>ui.nearMiss.classList.remove('show'),260);}
+  pushRewardFeed('NEAR MISS','+25',{color:'#9ffcff',icon:'✦',emphasis:true,life:.84});
   if(ui.status)ui.status.textContent='NEAR MISS CHARGE!';
   syncComboFeedback();
   pulseComboBadge();
@@ -1354,6 +1575,7 @@ function showNearMiss(){
 function enemyBullet(pos,dir){
   const now=performance.now()/1000;
   if(now-audioTimers.enemyShot>.2){audio.play('enemy_mg_burst_01',.18);audioTimers.enemyShot=now;}
+  playRewardCue('incomingFire');
   muzzleFlash(pos, 0xff3b1f, 0.9);
   const g = createTracerMesh({
     color: 0xff3b1f,
@@ -1383,6 +1605,7 @@ function damagePlayer(n){
       if(player.combo>0){
         resetComboFeedback();
         floatingText('COMBO BROKEN',player.group.position.clone().add(new THREE.Vector3(0,1.25,.2)),'#ff7a3d');
+        playRewardCue('comboBroken');
       }
     }
   }
@@ -1395,6 +1618,8 @@ function endGame(){
   repair.feedbackT=0;
   repair.feedbackType='idle';
   clearCenterToast();
+  clearRewardFeed();
+  if(ui.nearMiss)ui.nearMiss.classList.remove('show');
   resetCombatComboState();
   audio.stopLoop('mg_overdrive_loop');
   audio.fadeLoop('engine_loop',0,.75,true);
@@ -1422,6 +1647,8 @@ function resetGame(){
   repair.feedbackType='idle';
   repair.progress=0;
   clearCenterToast();
+  clearRewardFeed();
+  if(ui.nearMiss)ui.nearMiss.classList.remove('show');
   audio.stopLoop('repair_loop');
   audio.stopLoop('mg_overdrive_loop');
   audioTimers.criticalBeep=0;
@@ -1600,7 +1827,7 @@ function interceptBullets(){
       playerBullet.consumed=true;hostileBullet.consumed=true;
       burstParticles(hit.midpoint,{color:0xfff4c8,count:10,speed:11,size:[0.035,0.09],life:[0.14,0.32],additive:true});
       burstParticles(hit.midpoint,{color:0x9ffcff,count:5,speed:8,size:[0.025,0.06],life:[0.12,0.25],additive:true});
-      floatingText(`INTERCEPT +${bulletInterceptConfig.score}`,hit.midpoint,'#fff1b8');
+      pushRewardFeed('INTERCEPT',bulletInterceptConfig.score,{color:'#fff1b8',icon:'✦',emphasis:true,life:.88});
       player.score+=bulletInterceptConfig.score;
       player.shake=Math.max(player.shake,.08);
       audio.playRandom(whizSounds,.16);audio.play('ui_confirm',.06,false);
@@ -1651,6 +1878,7 @@ function updateBullets(dt){
           e.hp-=b.explosive?3:1;
           hitImpact(hit.closest, b.color || 0xffd27a);
           pulseReticleHit();
+          pushEnemyHitReward(b.explosive?3:1);
           registerEnemyHitCombo(hit.closest);
           if(b.explosive)explosion(e.group.position.clone(), true);
           b.consumed=true;
@@ -1659,8 +1887,8 @@ function updateBullets(dt){
             pulseReticleKill();
             explosion(killPos, true);scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;
             freezeTimer=Math.max(freezeTimer,.045);
-            addCombo(1,killPos.clone().add(new THREE.Vector3(0,.9,0)),'COMBO +1','#ffd27a');
-            floatingText('KILL +50', killPos.clone().add(new THREE.Vector3(0,.35,0)), '#fff1b8',{fontSize:30,life:.95,rise:54});
+            pushRewardFeed('KILL','+50',{color:'#fff1b8',icon:'✦',emphasis:true,life:.9});
+            addCombo(1,null,'COMBO','#ffd27a',{feedValue:'+1',life:.82});
             player.cameraKick=Math.max(player.cameraKick||0,.34);
             player.shake=Math.max(player.shake,.16);
             flashScreen(0.12, 'rgba(255,198,92,1)'); audio.play('ui_confirm',.08,false);

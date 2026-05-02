@@ -953,7 +953,6 @@ function updateWaveDirector(dt){
     eventCrest('HEAVY FIGHTER INBOUND',{sub:'BREAK FORMATION',kind:'danger',duration:980});
   }
 }
-updateWaveDirector(.016);
 
 function removeMineAt(index,detonate=false,reward=false){
   const m=mines[index];

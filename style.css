@@ -108,10 +108,14 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   transform:translate(-50%,-50%);
 }
 .radar-blip.danger{width:6px;height:6px;transform:translate(-50%,-50%) rotate(45deg);border-radius:1px}
+.radar-blip.warning{animation:radarThreatBlink .28s ease-out infinite alternate;background:#ffd27a;box-shadow:0 0 9px rgba(255,210,122,.92),0 0 18px rgba(255,75,47,.48)}
+.radar-blip.ace{width:6px;height:6px;transform:translate(-50%,-50%) rotate(45deg);border-radius:1px;background:#9ffcff;border-color:rgba(235,255,255,.88);box-shadow:0 0 8px rgba(70,242,255,.95),0 0 16px rgba(255,255,255,.36)}
+.radar-blip.bomber{width:8px;height:8px;background:#ff9a3d;border-color:rgba(255,232,190,.8);box-shadow:0 0 9px rgba(255,122,48,.95),0 0 18px rgba(255,92,34,.45)}
+.radar-blip.heavy{width:9px;height:9px;transform:translate(-50%,-50%) rotate(45deg);border-radius:1px;background:#ffd27a;border-color:rgba(255,245,210,.92);animation:radarHeavyPulse .44s ease-in-out infinite alternate;box-shadow:0 0 12px rgba(255,210,122,1),0 0 24px rgba(255,75,47,.58)}
 
 #comboBadge{
   position:absolute;right:clamp(34px,4.6vw,78px);bottom:clamp(152px,18vw,190px);
-  min-width:70px;padding:5px 8px 9px;
+  min-width:96px;padding:5px 8px 9px;
   border-left:2px solid rgba(255,210,122,.55);
   background:linear-gradient(90deg,rgba(7,12,16,.38),rgba(7,12,16,0));
   opacity:0;transform:translateY(4px) scale(.96);transform-origin:right center;
@@ -122,7 +126,8 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   text-shadow:0 0 8px rgba(255,191,64,.72),0 0 24px rgba(255,125,52,.34);
 }
 #comboBadgeLabel{
-  display:block;margin-top:2px;font-size:9px;font-weight:700;letter-spacing:.14em;color:#fff1c7;opacity:.7;
+  display:block;margin-top:2px;font-size:9px;font-weight:700;letter-spacing:.08em;color:#fff1c7;opacity:.7;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 #comboCharge{
   position:absolute;left:8px;right:10px;bottom:4px;height:2px;width:0%;
@@ -138,9 +143,78 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 #comboBadge.flow{filter:drop-shadow(0 0 24px rgba(70,242,255,.52))}
 #comboBadge.flow #comboBadgeLabel{color:#9ffcff;opacity:.9}
 #comboBadge.flow #comboCharge{height:3px;box-shadow:0 0 14px rgba(70,242,255,.86)}
+#comboBadge.tier-ready #comboCharge{background:linear-gradient(90deg,#6ef7ff,#ffd27a,#ff7a3d);box-shadow:0 0 14px rgba(255,210,122,.78)}
+
+#overchargeIndicator{
+  position:absolute;right:clamp(34px,4.6vw,78px);bottom:clamp(132px,15.8vw,166px);
+  min-width:96px;opacity:0;transform:translateY(4px);
+  font-size:10px;font-weight:900;letter-spacing:.08em;text-align:right;color:#9ffcff;
+  text-shadow:0 1px 3px rgba(0,0,0,.92),0 0 10px rgba(70,242,255,.68),0 0 18px rgba(255,210,122,.28);
+  transition:opacity .12s ease,transform .12s ease;
+}
+#overchargeIndicator.active{opacity:.92;transform:translateY(0)}
+#flowIndicator{
+  position:absolute;right:clamp(34px,4.6vw,78px);bottom:clamp(118px,14.3vw,150px);
+  min-width:96px;opacity:0;transform:translateY(4px);
+  font-size:10px;font-weight:900;letter-spacing:.14em;text-align:right;color:#ffe8a2;
+  text-shadow:0 1px 3px rgba(0,0,0,.92),0 0 10px rgba(255,210,122,.68),0 0 18px rgba(70,242,255,.28);
+  transition:opacity .18s ease,transform .18s ease;
+}
+#flowIndicator.active{opacity:.88;transform:translateY(0)}
+#finalStandCountdown{
+  position:fixed;left:50%;top:62%;z-index:9;pointer-events:none;
+  transform:translate(-50%,-50%) scale(.96);opacity:0;
+  font-size:clamp(18px,2.2vw,30px);font-weight:900;letter-spacing:.12em;color:#ffcf8a;
+  text-shadow:0 1px 4px rgba(0,0,0,.95),0 0 18px rgba(255,88,32,.88),0 0 34px rgba(255,210,122,.28);
+  transition:opacity .12s ease,transform .12s ease;
+}
+#finalStandCountdown.active{opacity:1;transform:translate(-50%,-50%) scale(1);animation:finalStandCountdownPulse .42s ease-in-out infinite alternate}
 
 #weapon.weapon-pulse{animation:weaponUnlockPulse .42s ease-out}
 #weapon.weapon-pulse.cyan{filter:drop-shadow(0 0 26px rgba(70,242,255,.48))}
+#eventCrest{
+  position:fixed;left:50%;top:30%;z-index:11;pointer-events:none;
+  min-width:min(520px,88vw);min-height:150px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  transform:translate(-50%,-50%) scale(.76);opacity:0;
+  color:#ffd27a;text-align:center;text-transform:uppercase;letter-spacing:.08em;
+  transition:opacity .12s ease,transform .12s ease,filter .12s ease;
+}
+#eventCrest::before{
+  content:'';position:absolute;left:50%;top:50%;width:min(560px,94vw);height:230px;
+  transform:translate(-50%,-50%);z-index:-2;
+  background:radial-gradient(ellipse at center,rgba(255,210,122,.35),rgba(255,120,48,.12) 42%,rgba(255,120,48,0) 72%);
+  filter:blur(8px);
+}
+#eventCrest::after{
+  content:'';position:absolute;inset:12px 0;z-index:-1;
+  background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,0) 34%,rgba(255,248,210,.34) 48%,rgba(255,255,255,0) 62%,transparent 100%);
+  transform:translateX(-120%);opacity:0;
+}
+#eventCrest.show{opacity:1;transform:translate(-50%,-50%) scale(1);animation:eventCrestPop 1.05s cubic-bezier(.17,.92,.24,1) forwards}
+#eventCrest.show::after{animation:eventCrestSweep .92s ease-out .08s forwards}
+#eventCrest.cyan{color:#9ffcff}
+#eventCrest.danger{color:#ffcf8a}
+#eventCrest.cyan::before{background:radial-gradient(ellipse at center,rgba(70,242,255,.34),rgba(255,210,122,.13) 43%,rgba(70,242,255,0) 72%)}
+#eventCrest.danger::before{background:radial-gradient(ellipse at center,rgba(255,92,34,.42),rgba(255,210,122,.16) 45%,rgba(255,92,34,0) 74%)}
+.event-crest-icon{
+  width:clamp(70px,8vw,118px);height:auto;object-fit:contain;display:block;
+  filter:drop-shadow(0 0 12px currentColor) drop-shadow(0 0 30px rgba(255,210,122,.45));
+}
+#eventCrest.fallback .event-crest-icon{display:none}
+#eventCrest.fallback .event-crest-text::before{
+  content:'';position:absolute;left:50%;top:50%;width:116px;height:116px;z-index:-1;
+  transform:translate(-50%,-50%) rotate(45deg);
+  border:2px solid currentColor;background:rgba(5,8,12,.24);box-shadow:0 0 20px currentColor;
+}
+.event-crest-text{
+  position:relative;font-size:clamp(28px,4.8vw,62px);font-weight:900;line-height:.88;
+  text-shadow:0 1px 4px rgba(0,0,0,.95),0 0 18px currentColor,0 0 42px rgba(255,210,122,.36);
+}
+.event-crest-sub{
+  font-size:clamp(11px,1.2vw,15px);font-weight:900;letter-spacing:.2em;opacity:.86;
+  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 10px currentColor;
+}
 #centerToast{
   position:fixed;top:31%;left:50%;z-index:9;pointer-events:none;
   transform:translate(-50%,-50%) scale(.94);opacity:0;
@@ -309,15 +383,30 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 
 /* Aircraft-centered repair indicator */
 #repairBox{
-  position:absolute;left:50%;top:50%;width:84px;height:96px;
+  position:absolute;left:50%;top:50%;width:100px;height:114px;
   transform:translate(-50%,-50%) scale(.92);text-align:center;opacity:0;
   transition:opacity .12s ease,transform .12s ease,filter .12s ease,border-color .12s ease;
   filter:drop-shadow(0 0 12px rgba(70,242,255,.34));
 }
 #repairBox.active{opacity:1;transform:translate(-50%,-50%) scale(1)}
-.repair-dial{position:absolute;left:10px;top:0;width:64px;height:64px;overflow:visible}
+#repairBox::before{
+  content:'';position:absolute;left:11px;top:0;width:78px;height:78px;border-radius:50%;
+  background:repeating-conic-gradient(from -90deg,rgba(232,252,255,.32) 0 2deg,transparent 2deg 22.5deg);
+  -webkit-mask:radial-gradient(circle,transparent 53%,#000 55% 62%,transparent 64%);
+  mask:radial-gradient(circle,transparent 53%,#000 55% 62%,transparent 64%);
+  opacity:.72;pointer-events:none;
+}
+#repairBox::after{
+  content:'';position:absolute;left:11px;top:0;width:78px;height:78px;border-radius:50%;
+  background:conic-gradient(from var(--danger-angle,210deg),transparent 0 78%,rgba(255,116,70,var(--danger-alpha,.58)) 80% 87%,transparent 90% 100%);
+  -webkit-mask:radial-gradient(circle,transparent 50%,#000 54% 64%,transparent 67%);
+  mask:radial-gradient(circle,transparent 50%,#000 54% 64%,transparent 67%);
+  opacity:0;filter:drop-shadow(0 0 7px rgba(255,95,55,.48));pointer-events:none;
+}
+#repairBox.danger::after{opacity:var(--danger-alpha,.58);animation:repairDangerArc .34s ease-out infinite alternate}
+.repair-dial{position:absolute;left:11px;top:0;width:78px;height:78px;overflow:visible}
 .repair-track,.repair-ring{
-  fill:rgba(7,16,20,.42);stroke-width:5.5;transform:rotate(-90deg);transform-origin:32px 32px;
+  fill:rgba(7,16,20,.42);stroke-width:6;transform:rotate(-90deg);transform-origin:32px 32px;
 }
 .repair-track{stroke:rgba(220,244,245,.28)}
 .repair-ring{
@@ -326,7 +415,7 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   transition:stroke .12s ease,stroke-dashoffset .045s linear;
 }
 .repair-icon{
-  position:absolute;left:50%;top:32px;width:25px;height:25px;transform:translate(-50%,-50%);
+  position:absolute;left:50%;top:39px;width:29px;height:29px;transform:translate(-50%,-50%);
   border:1px solid rgba(238,252,255,.72);background:rgba(7,16,20,.58);
   box-shadow:inset 0 0 10px rgba(70,242,255,.18),0 0 10px rgba(70,242,255,.18);
 }
@@ -336,7 +425,7 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 }
 .repair-icon span{width:10px;height:3px;transform:translate(-50%,-50%) rotate(48deg)}
 .repair-status{
-  position:absolute;top:69px;left:50%;min-width:128px;transform:translateX(-50%);
+  position:absolute;top:86px;left:50%;min-width:142px;transform:translateX(-50%);
   font-size:13px;font-weight:900;letter-spacing:.08em;color:#dffcff;white-space:nowrap;
   text-shadow:0 0 8px rgba(70,242,255,.72),0 0 18px rgba(70,242,255,.28);
 }
@@ -344,6 +433,8 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 #repairBox.good .repair-status{color:#b8ffd4;text-shadow:0 0 10px rgba(121,255,178,.7)}
 #repairBox.perfect .repair-ring{stroke:#ffd86a;filter:drop-shadow(0 0 9px rgba(255,216,106,.88))}
 #repairBox.perfect .repair-status{color:#ffe8a2;text-shadow:0 0 12px rgba(255,216,106,.8)}
+#repairBox.good-zone .repair-ring{stroke:#ffd86a;filter:drop-shadow(0 0 8px rgba(255,216,106,.78))}
+#repairBox.perfect-zone .repair-ring{stroke:#8ffcff;filter:drop-shadow(0 0 9px rgba(70,242,255,.9)) drop-shadow(0 0 12px rgba(255,216,106,.28));animation:repairPerfectZone .46s ease-in-out infinite alternate}
 #repairBox.interrupted{filter:drop-shadow(0 0 12px rgba(255,75,47,.5));animation:repairJolt .16s ease-out}
 #repairBox.interrupted .repair-ring{stroke:#ff4b2f;filter:drop-shadow(0 0 8px rgba(255,75,47,.84))}
 #repairBox.interrupted .repair-status{color:#ffb3a4;text-shadow:0 0 10px rgba(255,75,47,.78)}
@@ -374,6 +465,23 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
     radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 50%,rgba(2,8,18,.18) 100%);
 }
 #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 48%,transparent 42%,rgba(80,0,0,.2) 68%,rgba(0,0,0,.58) 100%);opacity:0;transition:opacity .12s;z-index:4}
+body.flow-state #compositionVignette{
+  background:
+    radial-gradient(ellipse at 50% 43%,rgba(245,250,255,.1) 0%,rgba(235,245,255,.05) 22%,rgba(235,245,255,0) 42%),
+    radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 46%,rgba(70,242,255,.08) 78%,rgba(255,210,122,.12) 100%);
+}
+body.flow-state .aim-reticle{
+  opacity:.72;filter:drop-shadow(0 0 8px rgba(70,242,255,.48)) drop-shadow(0 0 14px rgba(255,210,122,.24));
+}
+body.flow-state #weapon,
+body.flow-state #comboBadge{
+  filter:drop-shadow(0 0 18px rgba(70,242,255,.28)) drop-shadow(0 0 16px rgba(255,210,122,.14));
+}
+body.final-stand-active #vignette{
+  opacity:1!important;
+  background:radial-gradient(circle at 50% 48%,transparent 36%,rgba(255,64,24,.28) 68%,rgba(0,0,0,.68) 100%)!important;
+  animation:finalStandEdgePulse .32s ease-in-out infinite alternate;
+}
 
 @keyframes criticalPulse{
   0%,100%{transform:translateX(-50%) scale(.98);opacity:.78;filter:brightness(.9)}
@@ -388,6 +496,14 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 }
 @keyframes radarSweep{
   to{transform:rotate(360deg)}
+}
+@keyframes radarThreatBlink{
+  0%{opacity:.62;filter:brightness(1)}
+  100%{opacity:1;filter:brightness(1.8)}
+}
+@keyframes radarHeavyPulse{
+  0%{opacity:.72;filter:brightness(1);box-shadow:0 0 10px rgba(255,210,122,.85),0 0 20px rgba(255,75,47,.46)}
+  100%{opacity:1;filter:brightness(1.9);box-shadow:0 0 16px rgba(255,245,190,1),0 0 30px rgba(255,75,47,.72)}
 }
 @keyframes startHintFade{
   0%,50%{opacity:.58}
@@ -422,6 +538,27 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   42%{transform:scale(1.025);filter:drop-shadow(0 0 18px rgba(255,191,64,.44))}
   100%{transform:scale(1);filter:drop-shadow(0 8px 18px rgba(0,0,0,.22))}
 }
+@keyframes eventCrestPop{
+  0%{transform:translate(-50%,-50%) scale(.72);opacity:0;filter:blur(2px) brightness(1)}
+  18%{opacity:1}
+  38%{transform:translate(-50%,-50%) scale(1.12);filter:blur(0) brightness(1.45)}
+  58%{transform:translate(-50%,-50%) scale(1);filter:brightness(1.08)}
+  82%{opacity:1}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(.98);filter:brightness(.98)}
+}
+@keyframes eventCrestSweep{
+  0%{transform:translateX(-120%);opacity:0}
+  22%{opacity:1}
+  68%,100%{transform:translateX(120%);opacity:0}
+}
+@keyframes finalStandCountdownPulse{
+  0%{filter:brightness(1);letter-spacing:.1em}
+  100%{filter:brightness(1.55);letter-spacing:.15em}
+}
+@keyframes finalStandEdgePulse{
+  0%{filter:brightness(1)}
+  100%{filter:brightness(1.32)}
+}
 @keyframes centerToastPop{
   0%{transform:translate(-50%,-50%) scale(.88);filter:blur(1px)}
   45%{transform:translate(-50%,-50%) scale(1.08);filter:blur(0)}
@@ -436,6 +573,14 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   35%{transform:translate(calc(-50% - 4px),-50%) scale(1.04)}
   70%{transform:translate(calc(-50% + 3px),-50%) scale(.98)}
   100%{transform:translate(-50%,-50%) scale(1)}
+}
+@keyframes repairPerfectZone{
+  0%{filter:drop-shadow(0 0 7px rgba(70,242,255,.72)) drop-shadow(0 0 8px rgba(255,216,106,.2))}
+  100%{filter:drop-shadow(0 0 13px rgba(70,242,255,.94)) drop-shadow(0 0 16px rgba(255,216,106,.46))}
+}
+@keyframes repairDangerArc{
+  0%{opacity:.28;transform:scale(.985)}
+  100%{opacity:.62;transform:scale(1.018)}
 }
 
 @media (max-width: 900px){

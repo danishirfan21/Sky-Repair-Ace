@@ -1109,10 +1109,18 @@ ui.reticle=document.getElementById('aimReticle');
 
 const rewardFeedItems=[];
 const maxRewardFeedItems=5;
+const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT']);
+const enemyHitFeedState={pending:0,timer:null,lastShown:0,windowMs:320};
 function formatRewardValue(value){
   if(value===undefined||value===null||value==='')return '';
   if(typeof value==='number')return `${value>=0?'+':''}${value}`;
   return String(value);
+}
+function rewardPriorityFor(label,options={}){
+  if(Number.isFinite(options.priority))return options.priority;
+  if(label==='ENEMY HIT')return 0;
+  if(highPriorityRewardLabels.has(label))return 3;
+  return options.emphasis?2:1;
 }
 function removeRewardFeedItem(item){
   if(item.timer)clearTimeout(item.timer);
@@ -1120,9 +1128,26 @@ function removeRewardFeedItem(item){
   const idx=rewardFeedItems.indexOf(item);
   if(idx>=0)rewardFeedItems.splice(idx,1);
 }
+function makeRoomForReward(priority){
+  if(rewardFeedItems.length<maxRewardFeedItems)return true;
+  let lowestIdx=0;
+  let lowestPriority=rewardFeedItems[0]?.priority ?? 1;
+  for(let i=1;i<rewardFeedItems.length;i++){
+    const itemPriority=rewardFeedItems[i]?.priority ?? 1;
+    if(itemPriority<lowestPriority){
+      lowestPriority=itemPriority;
+      lowestIdx=i;
+    }
+  }
+  if(priority<lowestPriority)return false;
+  removeRewardFeedItem(rewardFeedItems[lowestIdx]);
+  return true;
+}
 function pushRewardFeed(label,value,options={}){
   if(!ui.rewardFeed||!label)return;
   const life=options.life ?? options.duration ?? .78;
+  const priority=rewardPriorityFor(label,options);
+  if(!makeRoomForReward(priority))return;
   const line=document.createElement('div');
   line.className=`reward-line${options.emphasis?' emphasis':''}${options.colorClass?' '+options.colorClass:''}`;
   if(options.color)line.style.color=options.color;
@@ -1141,12 +1166,41 @@ function pushRewardFeed(label,value,options={}){
 
   line.append(icon,labelEl,valueEl);
   ui.rewardFeed.appendChild(line);
-  const item={el:line,timer:null};
+  const item={el:line,timer:null,priority,label};
   item.timer=setTimeout(()=>removeRewardFeedItem(item),life*1000+80);
   rewardFeedItems.push(item);
-  while(rewardFeedItems.length>maxRewardFeedItems)removeRewardFeedItem(rewardFeedItems[0]);
+}
+function flushEnemyHitRewardFeed(){
+  if(enemyHitFeedState.timer){
+    clearTimeout(enemyHitFeedState.timer);
+    enemyHitFeedState.timer=null;
+  }
+  const count=enemyHitFeedState.pending;
+  enemyHitFeedState.pending=0;
+  if(count<=0)return;
+  enemyHitFeedState.lastShown=performance.now();
+  pushRewardFeed('ENEMY HIT',count,{color:'#f8fbff',life:.58,priority:0});
+}
+function pushEnemyHitReward(amount=1){
+  enemyHitFeedState.pending+=amount;
+  const now=performance.now();
+  const wait=Math.max(0,enemyHitFeedState.windowMs-(now-enemyHitFeedState.lastShown));
+  if(wait<=0&&!enemyHitFeedState.timer){
+    flushEnemyHitRewardFeed();
+    return;
+  }
+  if(!enemyHitFeedState.timer){
+    enemyHitFeedState.timer=setTimeout(flushEnemyHitRewardFeed,wait);
+  }
+}
+function clearPendingEnemyHitReward(){
+  if(enemyHitFeedState.timer)clearTimeout(enemyHitFeedState.timer);
+  enemyHitFeedState.timer=null;
+  enemyHitFeedState.pending=0;
+  enemyHitFeedState.lastShown=0;
 }
 function clearRewardFeed(){
+  clearPendingEnemyHitReward();
   rewardFeedItems.splice(0).forEach(item=>{
     if(item.timer)clearTimeout(item.timer);
     item.el?.remove();
@@ -1312,6 +1366,7 @@ function repairSuccess(perfect){
     if(clutchPerfect){
       player.shake=Math.max(player.shake,.25);
       flashScreen(.22,'rgba(255,245,180,1)');
+      pushRewardFeed('CLUTCH SAVE','',{color:'#fff1b8',icon:'!',emphasis:true,life:1.05});
       centerToast('CLUTCH SAVE', '#fff1b8', 760, 'warm');
     }
   }else{
@@ -1704,7 +1759,7 @@ function updateBullets(dt){
           e.hp-=b.explosive?3:1;
           hitImpact(hit.closest, b.color || 0xffd27a);
           pulseReticleHit();
-          pushRewardFeed('ENEMY HIT',b.explosive?'+3':'+1',{color:'#f8fbff',life:.48});
+          pushEnemyHitReward(b.explosive?3:1);
           registerEnemyHitCombo(hit.closest);
           if(b.explosive)explosion(e.group.position.clone(), true);
           b.consumed=true;

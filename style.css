@@ -455,6 +455,16 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 }
 .start-hint.hidden{opacity:0;visibility:hidden;animation:none;background:rgba(5,9,13,0);color:rgba(247,250,252,0);text-shadow:none}
 .start-hint.gone{display:none}
+#tutorialHint{
+  position:fixed;left:24px;bottom:28px;z-index:8;max-width:min(260px,72vw);
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  color:#dffcff;background:rgba(5,10,14,.42);border:1px solid rgba(110,247,255,.18);
+  padding:9px 12px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  text-shadow:0 0 12px rgba(110,247,255,.38);box-shadow:0 0 20px rgba(70,242,255,.08);
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  transition:opacity .22s ease,transform .22s ease;
+}
+#tutorialHint.show{opacity:1;transform:translateY(0)}
 
 /* Flash & vignette overlays */
 #flash{position:fixed;inset:0;background:white;opacity:0;pointer-events:none;z-index:10;transition:opacity .12s}

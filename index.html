@@ -3,26 +3,50 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sky Repair Ace – Near Miss + Last Stand</title>
+<title>Sky Repair Ace - Near Miss + Last Stand</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="flash"></div><div id="compositionVignette"></div><div id="vignette"></div>
 <div id="hud">
-  <div id="top" class="panel">
-    <div class="panel-inner">
-      <div class="hud-title">Sky Repair Ace <span class="icon">❤ ⚙</span></div>
-      <div class="hud-stats">Hull: <span id="hp" class="hull-val">100</span>% · Score: <span id="score" class="score-val">0</span> · Time: <span id="time" class="time-val">0.0</span>s</div>
-      <div class="hud-stats">Kills: <span id="kills" class="kill-val">0</span> · Near Miss: <span id="nearCount" class="near-val">0</span> · Max Combo: x<span id="maxCombo" class="combo-val">0</span> · Radar: <span id="enemyCount" class="radar-val">0</span></div>
+  <div id="stateVault" aria-hidden="true">
+    <span id="score">0</span>
+    <span id="time">0.0</span>
+    <span id="kills">0</span>
+    <span id="nearCount">0</span>
+    <span id="maxCombo">0</span>
+    <span id="enemyCount">0</span>
+    <span id="weaponRule">Combo x0</span>
+  </div>
+
+  <div id="threatRadar" class="threat-radar" aria-hidden="true">
+    <div class="radar-face">
+      <span class="radar-ring radar-ring-one"></span>
+      <span class="radar-ring radar-ring-two"></span>
+      <span class="radar-axis radar-axis-x"></span>
+      <span class="radar-axis radar-axis-y"></span>
+      <span class="radar-sweep"></span>
+      <span class="radar-player"></span>
+      <div id="radarBlips" class="radar-blips"></div>
     </div>
   </div>
-  <div id="weapon" class="panel">
-    <div class="panel-inner">
-      <div class="muted-label">ACTIVE WEAPON</div>
-      <div class="weapon-name" id="weaponName">Single Shot</div>
-      <div class="pill" id="weaponRule">Combo x0</div>
+
+  <div id="weapon" class="combat-cluster" aria-hidden="true">
+    <div class="hull-line">
+      <span>HULL</span>
+      <span><span id="hp">100</span>%</span>
+    </div>
+    <div class="hull-track"><span id="hullBar"></span></div>
+    <div class="weapon-line">
+      <span id="weaponName">Single Shot</span>
+      <span class="ammo-infinity">∞</span>
+    </div>
+    <div class="repair-line">
+      <span id="repairLabel">REPAIR</span>
+      <span id="repairCompact" class="repair-key">R</span>
     </div>
   </div>
+
   <div id="comboBadge">
     <span id="comboBadgeValue">x0</span>
     <span id="comboBadgeLabel">COMBO</span>
@@ -45,9 +69,7 @@
     <div id="repairIcon" class="repair-icon"><span></span></div>
     <div id="status" class="repair-status">HOLD R TO REPAIR</div>
   </div>
-  <div id="controls" class="panel">
-    <div class="panel-inner">WASD: move &middot; Mouse/LMB or Space: fire &middot; Hold R to repair &middot; Near misses during repair give score + slow-mo &middot; Perfect repairs add combo</div>
-  </div>
+  <div id="controls" class="start-hint">WASD move · LMB/Space fire · Hold R repair</div>
 </div>
 <div id="lastStand">
   <div id="card">

@@ -566,7 +566,7 @@ const aimNdc=new THREE.Vector2(),aimRaycaster=new THREE.Raycaster(),aimDir=new T
 const aimAssistProbe=new THREE.Vector3(),aimAssistDir=new THREE.Vector3();
 const aimAssistConfig={enabled:true,radius:.26,maxStrength:.58,stickTime:.2,farScale:.05};
 const aimAssistState={target:null,timer:0,active:false,strength:0};
-window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();});
+window.addEventListener('keydown',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','KeyR'].includes(e.code))hideStartHint();});
 window.addEventListener('pointerdown',()=>ensureAudio(),{passive:true});
 window.addEventListener('keyup',e=>{if(gameKeys.has(e.code))e.preventDefault();keys.delete(e.code);});
 const mouse={x:innerWidth/2,y:innerHeight/2,targetX:innerWidth/2,targetY:innerHeight/2,down:false};
@@ -601,7 +601,7 @@ window.addEventListener('mousemove',e=>{
 });
 renderer.domElement.addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
-  e.preventDefault();mouse.down=true;ensureAudio();
+  e.preventDefault();mouse.down=true;ensureAudio();hideStartHint();
 });
 window.addEventListener('pointerup',e=>{if(e.button===0)mouse.down=false;});
 window.addEventListener('pointercancel',()=>{mouse.down=false;});
@@ -1147,6 +1147,7 @@ function shootOne(offX,angle=0,color=currentTier().color,explosive=false){
   player.cameraKick = Math.max(player.cameraKick || 0, 0.13+feedbackState.flow*.035);
 }
 function fireWeapon(){
+  hideStartHint();
   const tier=currentTier();
   if(player.weapon==='dual'){shootOne(-.28);shootOne(.28);}
   else if(player.weapon==='spread'){[-.18,-.09,0,.09,.18].forEach((a,i)=>shootOne(i%2?-0.28:0.28,a));}
@@ -1182,13 +1183,13 @@ function syncCombatCluster(){
     ui.hullBar.style.width=hp+'%';
     if(hp<30){
       ui.hullBar.style.background='linear-gradient(90deg,rgba(255,75,47,.95),rgba(255,190,145,.86))';
-      ui.hullBar.style.boxShadow='0 0 10px rgba(255,75,47,.62)';
+      ui.hullBar.style.boxShadow='0 0 7px rgba(255,75,47,.5)';
     }else if(hp<55){
       ui.hullBar.style.background='linear-gradient(90deg,rgba(255,201,92,.96),rgba(255,238,176,.86))';
-      ui.hullBar.style.boxShadow='0 0 9px rgba(255,201,92,.56)';
+      ui.hullBar.style.boxShadow='0 0 6px rgba(255,201,92,.44)';
     }else{
       ui.hullBar.style.background='linear-gradient(90deg,rgba(73,229,242,.94),rgba(177,255,255,.86))';
-      ui.hullBar.style.boxShadow='0 0 8px rgba(70,242,255,.56)';
+      ui.hullBar.style.boxShadow='0 0 5px rgba(70,242,255,.38)';
     }
   }
   if(ui.repairLabel&&ui.repairCompact){
@@ -1244,19 +1245,29 @@ function updateThreatRadar(dt){
     node.style.display='block';
     node.style.left=`${46+x}px`;
     node.style.top=`${46+y}px`;
-    node.style.opacity=String(THREE.MathUtils.clamp(1-dist/105,.36,.92));
+    node.style.opacity=String(THREE.MathUtils.clamp(1-dist/105,.62,1));
     node.classList.toggle('danger',dist<28);
   }
+}
+function hideStartHint(){
+  if(startHintTimer)clearTimeout(startHintTimer);
+  startHintTimer=null;
+  if(!ui.controls)return;
+  ui.controls.classList.add('hidden');
+  ui.controls.classList.add('gone');
 }
 function restartStartHint(){
   if(!ui.controls)return;
   if(startHintTimer)clearTimeout(startHintTimer);
-  ui.controls.classList.remove('hidden');
+  ui.controls.classList.remove('hidden','gone');
   ui.controls.style.animation='none';
   void ui.controls.offsetWidth;
   ui.controls.style.animation='';
-  startHintTimer=setTimeout(()=>ui.controls?.classList.add('hidden'),5200);
+  startHintTimer=setTimeout(hideStartHint,4000);
 }
+ui.controls?.addEventListener('animationend',e=>{
+  if(e.animationName==='startHintFade')hideStartHint();
+});
 const highPriorityRewardLabels=new Set(['KILL','COMBO','HIT CHAIN','NEAR MISS','PERFECT REPAIR','CLUTCH SAVE','INTERCEPT','WEAPON UNLOCK']);
 const rewardCueByLabel={
   'ENEMY HIT':'hit',
@@ -1515,6 +1526,7 @@ const repairRingCircumference=Math.PI*2*repairRingRadius;
 function repairAvailable(){return player.alive&&player.hp<100;}
 function startRepair(){
   if(repair.active||!repairAvailable())return;
+  hideStartHint();
   repair.active=true;
   repair.progress=0;
   repair.tookDamage=false;

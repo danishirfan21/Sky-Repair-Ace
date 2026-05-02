@@ -198,6 +198,9 @@ const rewardCueVolumes={hit:.11,chain:.16,kill:.24,combo:.13,nearMiss:.18,repair
 const rewardCueThrottle={hit:.22,chain:.26,combo:.3,nearMiss:.34,repair:.42,incomingFire:1.15,intercept:.28,comboBroken:.42};
 const rewardCueLast={};
 const duckingRewardCues=new Set(['kill','perfectRepair','unlock','nearMiss']);
+function resetRewardCueState(){
+  for(const key of Object.keys(rewardCueLast))delete rewardCueLast[key];
+}
 function playRewardCue(type,options={}){
   const id=rewardCueIds[type];
   if(!id)return false;
@@ -706,8 +709,44 @@ function removeBulletAt(index){
   scene.remove(b.mesh);
   bullets.splice(index,1);
 }
+function removeExpiredBulletForCap(){
+  const idx=bullets.findIndex(b=>b?.consumed||b?.life<=0);
+  if(idx>=0){
+    removeBulletAt(idx);
+    return true;
+  }
+  return false;
+}
+function removeFarthestBulletForCap(){
+  if(!bullets.length)return false;
+  let farthestIdx=-1;
+  let farthestScore=-Infinity;
+  const playerPos=player?.group?.position;
+  const cameraPos=camera?.position;
+  for(let i=0;i<bullets.length;i++){
+    const b=bullets[i];
+    const pos=b?.pos ?? b?.mesh?.position;
+    if(!pos)continue;
+    const playerDist=playerPos?pos.distanceToSquared(playerPos):0;
+    const cameraDist=cameraPos?pos.distanceToSquared(cameraPos):0;
+    const score=Math.max(playerDist,cameraDist);
+    if(score>farthestScore){
+      farthestScore=score;
+      farthestIdx=i;
+    }
+  }
+  if(farthestIdx>=0){
+    removeBulletAt(farthestIdx);
+    return true;
+  }
+  return false;
+}
 function addBullet(bullet){
-  while(bullets.length>=perfCaps.bullets)removeBulletAt(0);
+  while(bullets.length>=perfCaps.bullets){
+    if(removeExpiredBulletForCap())continue;
+    if(removeFarthestBulletForCap())continue;
+    removeBulletAt(0);
+  }
   bullets.push(bullet);
 }
 function addVfx(item){
@@ -743,8 +782,8 @@ function spawnEnemy(options={}){
 }
 const waveDirector={spawnTimer:0,burstTimer:0,opened:false,lastPhase:-1};
 function waveDirectorPhase(elapsed){
-  if(elapsed<5)return {target:3,max:4,interval:.42,aggression:.9,types:['straight','straight','swoop'],zMin:-38,zMax:-54,xSpread:24};
-  if(elapsed<15)return {target:5,max:5,interval:.82,aggression:1,types:['straight','straight','swoop'],zMin:-48,zMax:-72,xSpread:30};
+  if(elapsed<5)return {target:3,max:3,interval:.72,aggression:.78,types:['straight','straight','swoop'],zMin:-42,zMax:-58,xSpread:24};
+  if(elapsed<15)return {target:4,max:5,interval:.88,aggression:.95,types:['straight','straight','swoop'],zMin:-48,zMax:-72,xSpread:30};
   if(elapsed<30)return {target:6,max:6,interval:.72,aggression:1.12,types:['straight','swoop','swoop','dive'],zMin:-46,zMax:-76,xSpread:34};
   if(elapsed<45)return {target:7,max:7,interval:.64,aggression:1.22,types:['swoop','dive','straight','swoop'],zMin:-44,zMax:-76,xSpread:38,group:true};
   return {target:8,max:8,interval:.58,aggression:1.32,types:['swoop','dive','swoop','straight'],zMin:-42,zMax:-74,xSpread:42,group:true};
@@ -1859,6 +1898,7 @@ function endGame(){
   repair.feedbackType='idle';
   clearCenterToast();
   clearRewardFeed();
+  resetRewardCueState();
   if(ui.nearMiss)ui.nearMiss.classList.remove('show');
   resetCombatComboState();
   audio.stopLoop('mg_overdrive_loop');
@@ -1888,6 +1928,7 @@ function resetGame(){
   repair.progress=0;
   clearCenterToast();
   clearRewardFeed();
+  resetRewardCueState();
   if(ui.nearMiss)ui.nearMiss.classList.remove('show');
   audio.stopLoop('repair_loop');
   audio.stopLoop('mg_overdrive_loop');
@@ -1927,7 +1968,6 @@ function resetGame(){
   player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);syncComboFeedback();
   restartStartHint();
   if(ui.lastStand)ui.lastStand.classList.remove('show');
-  updateWaveDirector(.016);
 }
 if(ui.restart)ui.restart.addEventListener('click',resetGame);
 restartStartHint();

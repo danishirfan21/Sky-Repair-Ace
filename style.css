@@ -326,12 +326,12 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 }
 #repairBox::after{
   content:'';position:absolute;left:11px;top:0;width:78px;height:78px;border-radius:50%;
-  background:conic-gradient(from 210deg,transparent 0 78%,rgba(255,82,47,.9) 80% 88%,transparent 90% 100%);
+  background:conic-gradient(from 210deg,transparent 0 78%,rgba(255,116,70,.58) 80% 87%,transparent 90% 100%);
   -webkit-mask:radial-gradient(circle,transparent 50%,#000 54% 64%,transparent 67%);
   mask:radial-gradient(circle,transparent 50%,#000 54% 64%,transparent 67%);
-  opacity:0;filter:drop-shadow(0 0 9px rgba(255,75,47,.75));pointer-events:none;
+  opacity:0;filter:drop-shadow(0 0 7px rgba(255,95,55,.48));pointer-events:none;
 }
-#repairBox.danger::after{opacity:.85;animation:repairDangerArc .28s ease-out infinite alternate}
+#repairBox.danger::after{opacity:.58;animation:repairDangerArc .34s ease-out infinite alternate}
 .repair-dial{position:absolute;left:11px;top:0;width:78px;height:78px;overflow:visible}
 .repair-track,.repair-ring{
   fill:rgba(7,16,20,.42);stroke-width:6;transform:rotate(-90deg);transform-origin:32px 32px;
@@ -461,8 +461,8 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
   100%{filter:drop-shadow(0 0 13px rgba(70,242,255,.94)) drop-shadow(0 0 16px rgba(255,216,106,.46))}
 }
 @keyframes repairDangerArc{
-  0%{opacity:.38;transform:scale(.98)}
-  100%{opacity:.92;transform:scale(1.03)}
+  0%{opacity:.28;transform:scale(.985)}
+  100%{opacity:.62;transform:scale(1.018)}
 }
 
 @media (max-width: 900px){

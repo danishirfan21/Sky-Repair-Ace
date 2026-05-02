@@ -4,7 +4,7 @@ A high-octane Three.js flight combat and repair game.
 
 ## Features
 - **Dynamic Flight Combat**: Maneuver your plane with WASD.
-- **Repair Mechanics**: Press 'R' to start repairs when damaged.
+- **Repair Mechanics**: Hold 'R' when damaged to fill the repair ring.
 - **Near Miss System**: Fly close to bullets for bonus points and slow-motion.
 - **Weapon Tiers**: Get perfect repair chains to unlock powerful weapons.
 
@@ -27,5 +27,5 @@ A high-octane Three.js flight combat and repair game.
 ### Controls
 - **WASD**: Move
 - **Space**: Fire
-- **R**: Repair
+- **R**: Hold to repair
 - **Shift**: Boost

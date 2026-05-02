@@ -28,3 +28,6 @@ yarn-error.log*
 
 # Puppeteer/Chrome cache
 .chrome-repair-check/
+
+# Runtime screenshots
+runtime-*.png

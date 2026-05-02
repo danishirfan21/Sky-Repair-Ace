@@ -141,6 +141,15 @@ html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Ra
 #comboBadge.flow #comboCharge{height:3px;box-shadow:0 0 14px rgba(70,242,255,.86)}
 #comboBadge.tier-ready #comboCharge{background:linear-gradient(90deg,#6ef7ff,#ffd27a,#ff7a3d);box-shadow:0 0 14px rgba(255,210,122,.78)}
 
+#overchargeIndicator{
+  position:absolute;right:clamp(34px,4.6vw,78px);bottom:clamp(132px,15.8vw,166px);
+  min-width:96px;opacity:0;transform:translateY(4px);
+  font-size:10px;font-weight:900;letter-spacing:.08em;text-align:right;color:#9ffcff;
+  text-shadow:0 1px 3px rgba(0,0,0,.92),0 0 10px rgba(70,242,255,.68),0 0 18px rgba(255,210,122,.28);
+  transition:opacity .12s ease,transform .12s ease;
+}
+#overchargeIndicator.active{opacity:.92;transform:translateY(0)}
+
 #weapon.weapon-pulse{animation:weaponUnlockPulse .42s ease-out}
 #weapon.weapon-pulse.cyan{filter:drop-shadow(0 0 26px rgba(70,242,255,.48))}
 #centerToast{

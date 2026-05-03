@@ -772,6 +772,8 @@ const friendlyEscorts=[];
 const escortState={active:false,timer:0,nextAt:36};
 const supplyDropState={active:false,drop:null,nextAt:30};
 const runStats={firstKillTime:null,specialKills:0,finalStandKills:0,newRecords:[]};
+const runScoreBreakdown={killScore:0,nearMissScore:0,repairScore:0,specialScore:0,otherScore:0};
+const resultAnimationState={rafs:[],timers:[]};
 const liveRecordState={cache:{},shown:new Set(),lastToastAt:0};
 const tutorialHintState={el:null,timer:null};
 const recordSpecs=[
@@ -779,15 +781,26 @@ const recordSpecs=[
   {key:'skyRepairAce.bestTime',label:'NEW BEST TIME',mode:'max',value:()=>player.survival},
   {key:'skyRepairAce.bestCombo',label:'NEW BEST COMBO',mode:'max',value:()=>player.maxCombo},
   {key:'skyRepairAce.bestKills',label:'NEW BEST KILLS',mode:'max',value:()=>player.kills},
+  {key:'skyRepairAce.bestNearMisses',label:'NEW BEST NEAR MISSES',mode:'max',value:()=>player.nearMisses},
   {key:'skyRepairAce.fastestFirstKill',label:'FASTEST FIRST KILL',mode:'min',value:()=>runStats.firstKillTime},
   {key:'skyRepairAce.bestSpecialKills',label:'BEST SPECIAL HUNT',mode:'max',positive:true,value:()=>runStats.specialKills},
   {key:'skyRepairAce.bestFinalStandKills',label:'BEST FINAL STAND',mode:'max',positive:true,value:()=>runStats.finalStandKills}
 ];
+function resetRunScoreBreakdown(){
+  Object.keys(runScoreBreakdown).forEach(key=>{runScoreBreakdown[key]=0;});
+}
+function awardScore(category,points){
+  const amount=Number(points)||0;
+  player.score+=amount;
+  if(category&&Object.prototype.hasOwnProperty.call(runScoreBreakdown,category))runScoreBreakdown[category]+=amount;
+  else runScoreBreakdown.otherScore+=amount;
+}
 function resetRunStats(){
   runStats.firstKillTime=null;
   runStats.specialKills=0;
   runStats.finalStandKills=0;
   runStats.newRecords=[];
+  resetRunScoreBreakdown();
 }
 function readRecordValue(key){
   try{
@@ -828,6 +841,10 @@ function checkLiveRecords(type){
     const key='skyRepairAce.bestKills';
     const prev=liveRecordState.cache[key];
     if(player.kills>0&&(prev===null||prev===undefined||player.kills>prev))pushLiveRecordToast(key,'NEW KILL RECORD');
+  }else if(type==='nearMisses'){
+    const key='skyRepairAce.bestNearMisses';
+    const prev=liveRecordState.cache[key];
+    if(player.nearMisses>0&&(prev===null||prev===undefined||player.nearMisses>prev))pushLiveRecordToast(key,'NEW NEAR MISS RECORD');
   }else if(type==='firstKill'){
     const key='skyRepairAce.fastestFirstKill';
     const prev=liveRecordState.cache[key];
@@ -861,6 +878,130 @@ function renderRecordBadges(records){
     badge.textContent=label;
     ui.recordBadges.appendChild(badge);
   }
+}
+function clearResultAnimations(){
+  resultAnimationState.rafs.forEach(id=>cancelAnimationFrame(id));
+  resultAnimationState.rafs=[];
+  resultAnimationState.timers.forEach(timer=>clearTimeout(timer));
+  resultAnimationState.timers=[];
+}
+function setResultTimer(fn,delay){
+  const timer=setTimeout(()=>{
+    resultAnimationState.timers=resultAnimationState.timers.filter(id=>id!==timer);
+    fn();
+  },delay);
+  resultAnimationState.timers.push(timer);
+  return timer;
+}
+function countResultValue(el,target,{prefix='',suffix='',decimals=0,duration=760}={}){
+  if(!el)return;
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const format=value=>`${prefix}${decimals>0?value.toFixed(decimals):Math.round(value)}${suffix}`;
+  if(reduced||duration<=0){el.textContent=format(target);return;}
+  const start=performance.now();
+  let rafId=null;
+  const step=now=>{
+    const t=THREE.MathUtils.clamp((now-start)/duration,0,1);
+    const eased=1-Math.pow(1-t,3);
+    el.textContent=format(target*eased);
+    if(t<1){
+      rafId=requestAnimationFrame(step);
+      resultAnimationState.rafs.push(rafId);
+    }else{
+      resultAnimationState.rafs=resultAnimationState.rafs.filter(id=>id!==rafId);
+    }
+  };
+  rafId=requestAnimationFrame(step);
+  resultAnimationState.rafs.push(rafId);
+}
+function nextMilestone(value,milestones,prefix='',suffix=''){
+  const target=milestones.find(mark=>value<mark) ?? milestones[milestones.length-1];
+  const previous=[0,...milestones.filter(mark=>mark<target)].pop() ?? 0;
+  const span=Math.max(1,target-previous);
+  const progress=target===previous?1:THREE.MathUtils.clamp((value-previous)/span,0,1);
+  return {label:`Next milestone: ${prefix}${target}${suffix}`,progress};
+}
+function resultTitleAndSubtitle(){
+  const finalStand=player.lastStandUsed||runStats.finalStandKills>0;
+  let title='FINAL SORTIE';
+  if(finalStand)title='LAST STAND';
+  else if(player.score>=900||player.maxCombo>=15)title='ACE PILOT!';
+  else if(player.kills>=10)title='SKY ACE';
+
+  let subtitle=`Mission result · Score ${player.score}`;
+  if(finalStand)subtitle=`Legendary clutch pilot · Final stand kills ${runStats.finalStandKills}`;
+  else if(player.kills>=10)subtitle=`Heavy fighter hunter · Score ${player.score}`;
+  else if(player.nearMisses>=8)subtitle=`Near-miss specialist · ${player.nearMisses} close calls`;
+  if(finalStand)subtitle=`Legendary clutch pilot - Final stand survived ${Math.min(3,player.survival).toFixed(1)}s`;
+  subtitle=subtitle.replace(/[^\x20-\x7E]+/g,'-');
+  return {title,subtitle};
+}
+function resultFooterHook(){
+  if(player.maxCombo<30)return 'Reach x30 combo to unlock <strong>OVERDRIVE STORM</strong>';
+  if(player.survival<30)return 'Survive 30s to reach the next milestone';
+  return 'Beat your best combo to earn ACE rank';
+}
+function breakdownItems(){
+  const known=runScoreBreakdown.killScore+runScoreBreakdown.nearMissScore+runScoreBreakdown.repairScore+runScoreBreakdown.specialScore;
+  runScoreBreakdown.otherScore=Math.max(0,player.score-known);
+  const items=[
+    ['Kills',runScoreBreakdown.killScore],
+    ['Near Misses',runScoreBreakdown.nearMissScore],
+    ['Repairs',runScoreBreakdown.repairScore],
+    ['Specials',runScoreBreakdown.specialScore]
+  ];
+  if(runScoreBreakdown.otherScore>0)items.push(['Other',runScoreBreakdown.otherScore]);
+  items.push(['Total Score',player.score,'total']);
+  return items;
+}
+function renderBreakdown(){
+  if(!ui.resultsBreakdown)return;
+  ui.resultsBreakdown.textContent='';
+  const items=breakdownItems();
+  ui.resultsBreakdown.style.setProperty('--breakdown-cols',String(items.length));
+  for(const [label,value,kind] of items){
+    const item=document.createElement('div');
+    item.className=`results-breakdown-item${kind==='total'?' total':''}`;
+    const labelEl=document.createElement('span');
+    labelEl.textContent=label;
+    const valueEl=document.createElement('b');
+    valueEl.textContent=kind==='total'?String(value):`+${value}`;
+    item.append(labelEl,valueEl);
+    ui.resultsBreakdown.appendChild(item);
+  }
+}
+function renderResultStatRows(records){
+  const rows=[
+    {key:'time',value:player.survival,display:ui.finalTime,prefix:'',suffix:'s',decimals:1,milestones:[30,60,90,120],record:'NEW BEST TIME',recordable:player.survival>0},
+    {key:'kills',value:player.kills,display:ui.finalKills,prefix:'',suffix:'',decimals:0,milestones:[10,20,30,50],record:'NEW BEST KILLS',recordable:player.kills>0},
+    {key:'combo',value:player.maxCombo,display:ui.finalCombo,prefix:'x',suffix:'',decimals:0,milestones:[15,30,50],record:'NEW BEST COMBO',recordable:player.maxCombo>0},
+    {key:'near',value:player.nearMisses,display:ui.finalNear,prefix:'',suffix:'',decimals:0,milestones:[15,30,50],record:'NEW BEST NEAR MISSES',recordable:player.nearMisses>0}
+  ];
+  rows.forEach((stat,index)=>{
+    const row=document.querySelector(`.results-stat-row[data-stat="${stat.key}"]`);
+    if(!row)return;
+    const milestone=nextMilestone(stat.value,stat.milestones,stat.prefix,stat.suffix);
+    row.classList.toggle('is-record',stat.recordable&&records.includes(stat.record));
+    const milestoneEl=row.querySelector('.results-stat-milestone');
+    if(milestoneEl)milestoneEl.textContent=milestone.label;
+    const fill=row.querySelector('.results-progress span');
+    if(fill){
+      fill.style.width='0%';
+      setResultTimer(()=>{fill.style.width=`${Math.round(milestone.progress*100)}%`;},170+index*70);
+    }
+    countResultValue(stat.display,stat.value,{prefix:stat.prefix,suffix:stat.suffix,decimals:stat.decimals,duration:430+index*70});
+  });
+}
+function renderResultsScreen(records){
+  clearResultAnimations();
+  const {title,subtitle}=resultTitleAndSubtitle();
+  if(ui.resultsTitle)ui.resultsTitle.textContent=title;
+  if(ui.resultLine)ui.resultLine.textContent=subtitle;
+  if(ui.resultsFooterHook)ui.resultsFooterHook.innerHTML=resultFooterHook();
+  if(ui.lastStand)ui.lastStand.classList.toggle('critical',player.lastStandUsed||player.hp<=0||runStats.finalStandKills>0);
+  renderBreakdown();
+  renderResultStatRows(records);
+  countResultValue(ui.finalScore,player.score,{duration:820});
 }
 function sessionFlag(key){
   try{return sessionStorage.getItem(`skyRepairAce.${key}`)==='1';}catch(e){return false;}
@@ -972,7 +1113,7 @@ function triggerJackpot(label,points,pos,{tier='legendary',chance=1}={}){
   if(Math.random()>chance)return false;
   jackpotState.lastAt=performance.now()/1000;
   jackpotState.cooldown=8+Math.random()*4;
-  player.score+=points;
+  awardScore('specialScore',points);
   pushRewardFeed(label,`+${points}`,{color:tier==='legendary'?'#fff1b8':'#9ffcff',icon:'*',emphasis:true,priority:tier==='legendary'?9:7,tier,cueType:tier==='legendary'?'unlock':'perfectRepair',forceCue:true,variant:false,streak:false});
   addCombo(1,pos||player.group.position,null,'#fff1b8',{feed:false});
   burstParticles(pos||player.group.position,{color:tier==='legendary'?0xfff1b8:0x9ffcff,count:tier==='legendary'?14:10,speed:12,size:[.035,.11],life:[.16,.38],additive:true});
@@ -1270,7 +1411,7 @@ function updateFlakBarrage(dt){
   if(flakBarrageState.timer<=0&&flakBarrageState.shotsLeft<=0&&countBullets(b=>b.flak)===0){
     flakBarrageState.active=false;
     if(flakBarrageState.survived&&player.alive){
-      player.score+=50;
+      awardScore('specialScore',50);
       pushRewardFeed('BARRAGE EVADED','+50',{color:'#fff1b8',icon:'*',emphasis:true,life:1.12,cueType:'nearMiss',priority:6});
       addCombo(1,null,'COMBO','#fff1b8',{feedValue:'+1',life:.82,icon:'*'});
       player.cameraKick=Math.max(player.cameraKick||0,.15);
@@ -1436,7 +1577,7 @@ function collectSupplyDrop(){
   drop.collected=true;
   const heal=12+Math.floor(Math.random()*7);
   player.hp=Math.min(100,player.hp+heal);
-  player.score+=30;
+  awardScore('repairScore',30);
   repair.feedbackT=Math.max(0,repair.feedbackT-.45);
   repair.dangerRecent=0;
   pushRewardFeed('SUPPLY CLAIMED','+30',{color:'#fff1b8',icon:'*',emphasis:true,life:1.08,cueType:'repair',priority:6});
@@ -1492,7 +1633,7 @@ function removeMineAt(index,detonate=false,reward=false){
   }
   if(reward){
     pushRewardFeed('INTERCEPT','+15',{color:'#fff1b8',icon:'*',emphasis:false,life:.72,cueType:'intercept'});
-    player.score+=15;
+    awardScore('specialScore',15);
     addCombo(1,m.pos,'COMBO','#fff1b8',{feedValue:'+1',life:.7,icon:'*'});
   }
   scene.remove(m.mesh);
@@ -2175,7 +2316,8 @@ const ui={};
  'status','repairRing','repairIcon','flash','vignette','weaponName','weaponRule',
  'weapon','comboBadge','comboBadgeValue','comboBadgeLabel','comboCharge','rewardFeed',
  'hullBar','repairLabel','repairCompact','radarBlips','controls',
- 'lastStand','finalTime','finalKills','finalCombo','finalNear','resultLine','recordBadges','restart']
+ 'lastStand','resultsTitle','finalScore','finalTime','finalKills','finalCombo','finalNear',
+ 'resultLine','resultsBreakdown','resultsFooterHook','recordBadges','restart']
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
 ui.reticle=document.getElementById('aimReticle');
@@ -2956,8 +3098,9 @@ function nearMissStreak(pos) {
   player.shake = Math.max(player.shake, 0.2);
 }
 function showNearMiss(){
-  player.nearMisses++;player.score+=25;player.combo=Math.max(player.combo,0)+1;
+  player.nearMisses++;awardScore('nearMissScore',25);player.combo=Math.max(player.combo,0)+1;
   player.maxCombo=Math.max(player.maxCombo,player.combo);
+  checkLiveRecords('nearMisses');
   pushRewardFeed('NEAR MISS','+25',{color:'#9ffcff',icon:'✦',emphasis:true,life:.84});
   if(ui.status)ui.status.textContent='NEAR MISS CHARGE!';
   syncComboFeedback();
@@ -2994,7 +3137,7 @@ function triggerTerrainSkim(){
   terrainSkimState.cooldown=2.35+Math.random()*.65;
   terrainSkimState.hold=0;
   terrainSkimState.successes++;
-  player.score+=reward;
+  awardScore('nearMissScore',reward);
   pushRewardFeed(terrainLabel,`+${reward}`,{color:'#9ffcff',icon:'*',life:.82,cueType:'nearMiss',priority:1});
   if(terrainSkimState.successes%2===0)addCombo(1,null,'COMBO','#9ffcff',{feedValue:'+1',life:.7,icon:'*'});
   terrainSkimStreak();
@@ -3183,8 +3326,7 @@ function endGame(){
   const records=finalizeRunRecords();
   renderRecordBadges(records);
   if(records.length)showTutorialHint('seenRecordTip','RECORDS SAVE BETWEEN RUNS',{allowInactive:true});
-  const rank=player.survival>70||player.maxCombo>=15?'Legendary clutch pilot':player.survival>40||player.maxCombo>=8?'Elite panic mechanic':'Rookie ace under fire';
-  if(ui.resultLine)ui.resultLine.textContent=`${rank} · Score ${player.score}`;
+  renderResultsScreen(records);
   if(records.length)playRewardCue('unlock',{force:true,duck:true,duckAmount:.28});
   player.combo=0;syncComboFeedback();
   if(ui.lastStand)ui.lastStand.classList.add('show');flash(.7);audio.play('explosion_big',.5);
@@ -3193,6 +3335,7 @@ function resetGame(){
   runToken++;
   releaseMouseCapture();
   endRepair();
+  clearResultAnimations();
   repair.feedbackT=0;
   repair.feedbackType='idle';
   repair.progress=0;
@@ -3241,7 +3384,7 @@ function resetGame(){
   resetAimToCenter();
   player.group.position.set(0,0,0);player.vel.set(0,0,0);setWeaponFromCombo(0);syncComboFeedback();
   restartStartHint();
-  if(ui.lastStand)ui.lastStand.classList.remove('show');
+  if(ui.lastStand)ui.lastStand.classList.remove('show','critical');
 }
 if(ui.restart)ui.restart.addEventListener('click',resetGame);
 cacheRunRecords();
@@ -3428,7 +3571,7 @@ function interceptBullets(){
       burstParticles(hit.midpoint,{color:0xfff4c8,count:10,speed:11,size:[0.035,0.09],life:[0.14,0.32],additive:true});
       burstParticles(hit.midpoint,{color:0x9ffcff,count:5,speed:8,size:[0.025,0.06],life:[0.12,0.25],additive:true});
       pushRewardFeed('INTERCEPT',bulletInterceptConfig.score,{color:'#fff1b8',icon:'✦',emphasis:true,life:.88});
-      player.score+=bulletInterceptConfig.score;
+      awardScore('specialScore',bulletInterceptConfig.score);
       interceptComboState.count++;
       if(interceptComboState.count>=2){
         interceptComboState.count=0;
@@ -3517,17 +3660,17 @@ function updateBullets(dt){
             pulseReticleKill();
             const kind=e.kind||'normal';
             enemyDeathPayoff(killPos,kind,b.explosive);
-            scene.remove(e.group);enemies.splice(j,1);player.kills++;player.score+=50;
+            scene.remove(e.group);enemies.splice(j,1);player.kills++;awardScore('killScore',50);
             noteRunKill(kind);
             maybeJackpot('kill',killPos,{enemyKind:kind});
             freezeTimer=Math.max(freezeTimer,.058);
             if(slowTimer<=0.04)slowmo(.14,.68);
             const reward=kind==='miniBoss'?200:kind==='ace'?125:kind==='bomber'?100:50;
             const label=kind==='miniBoss'?'HEAVY DOWN':kind==='ace'?'ACE DOWN':kind==='bomber'?'BOMBER DOWN':'KILL';
-            player.score+=reward-50+(player.lastStand?100:0);
+            awardScore('killScore',reward-50+(player.lastStand?100:0));
             pushRewardFeed(label,`+${reward}`,{color:kind==='ace'?'#9ffcff':'#fff1b8',icon:'*',emphasis:true,life:kind==='normal'?1.08:1.42,forceCue:true});
             if(b.source==='escort'){
-              player.score+=25;
+              awardScore('specialScore',25);
               pushRewardFeed('ESCORT ASSIST','+25',{color:'#9ffcff',icon:'*',emphasis:true,life:.9,cueType:'kill',priority:3});
             }
             if(kind==='ace')centerToast('ACE DOWN','#9ffcff',680,'cyan');

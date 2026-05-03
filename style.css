@@ -1371,7 +1371,7 @@ body.final-stand-active #vignette{
   margin: 0;
   width: clamp(270px, 25vw, 410px);
   height: clamp(160px, 20vh, 250px);
-  background: url('assets/start/start_player_plane.png') no-repeat center center;
+  background: url('/assets/start/start_player_plane.png') no-repeat center center;
   background-size: contain;
   pointer-events: none;
   z-index: 4;
@@ -1392,7 +1392,7 @@ body.final-stand-active #vignette{
 .start-embers {
   position: absolute;
   inset: -10%;
-  background: url('assets/start/start_ember_overlay.png') no-repeat center center;
+  background: url('/assets/start/start_ember_overlay.png') no-repeat center center;
   background-size: cover;
   mix-blend-mode: screen;
   opacity: 0.35;

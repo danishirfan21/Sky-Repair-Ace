@@ -1709,3 +1709,116 @@ body.final-stand-active #vignette{
 @media (max-width: 600px) {
   .start-records { display: none; }
 }
+
+/* === DESKTOP ONLY GATE === */
+.desktop-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 207, 112, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(5, 8, 14, 0.98), rgba(2, 4, 8, 1));
+  color: #f5d889;
+  text-align: center;
+  overflow-y: auto;
+}
+
+.desktop-gate[hidden] {
+  display: none;
+}
+
+.desktop-gate-panel {
+  width: min(520px, 100%);
+  padding: clamp(24px, 6vw, 42px) clamp(20px, 5vw, 32px);
+  border: 1px solid rgba(255, 216, 120, 0.3);
+  background: linear-gradient(180deg, rgba(18, 25, 34, 0.94), rgba(7, 10, 15, 0.96));
+  box-shadow:
+    0 0 50px rgba(0, 0, 0, 0.8),
+    0 0 30px rgba(255, 176, 64, 0.1);
+  clip-path: polygon(15px 0, calc(100% - 15px) 0, 100% 15px, 100% calc(100% - 15px), calc(100% - 15px) 100%, 15px 100%, 0 calc(100% - 15px), 0 15px);
+  position: relative;
+}
+
+.desktop-gate-icon {
+  font-size: clamp(32px, 8vw, 48px);
+  margin-bottom: 16px;
+  color: #ffd878;
+  text-shadow: 0 0 15px rgba(255, 216, 120, 0.5);
+}
+
+.desktop-gate h1 {
+  margin: 0 0 16px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: clamp(28px, 9vw, 48px);
+  line-height: 1;
+  letter-spacing: 0.1em;
+  color: #ffd878;
+  text-shadow: 0 0 20px rgba(255, 184, 74, 0.4);
+}
+
+.desktop-gate p {
+  margin: 0 auto 24px;
+  max-width: 400px;
+  color: rgba(226, 246, 250, 0.8);
+  font-size: clamp(14px, 3.5vw, 16px);
+  line-height: 1.6;
+}
+
+.desktop-gate-spec {
+  margin-bottom: 28px;
+  color: rgba(255, 216, 120, 0.6);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-top: 1px solid rgba(255, 216, 120, 0.15);
+  padding-top: 20px;
+}
+
+.desktop-gate-button {
+  border: 1px solid rgba(255, 216, 120, 0.5);
+  background: rgba(255, 216, 120, 0.05);
+  color: #ffd878;
+  padding: 14px 28px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  max-width: 280px;
+}
+
+.desktop-gate-button:hover {
+  background: rgba(255, 216, 120, 0.15);
+  box-shadow: 0 0 15px rgba(255, 216, 120, 0.2);
+}
+
+body.desktop-gated canvas,
+body.desktop-gated #hud,
+body.desktop-gated #startScreen {
+  pointer-events: none;
+  filter: blur(4px) grayscale(0.5);
+  opacity: 0.4;
+  transition: all 0.5s ease;
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .desktop-gate-panel {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+    width: min(720px, 95vw);
+    text-align: left;
+    padding: 24px;
+  }
+  .desktop-gate-icon { margin-bottom: 0; font-size: 40px; }
+  .desktop-gate h1 { margin-bottom: 8px; font-size: 28px; }
+  .desktop-gate p { margin: 0 0 16px; }
+  .desktop-gate-spec { margin-bottom: 0; border-top: none; padding-top: 0; border-left: 1px solid rgba(255, 216, 120, 0.15); padding-left: 16px; }
+  .desktop-gate-button { width: auto; }
+}

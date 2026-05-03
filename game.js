@@ -52,7 +52,15 @@ window.addEventListener('resize',()=>{
 
 // Audio
 const AudioCtx=window.AudioContext||window.webkitAudioContext;let ctx;
+function isUnsupportedDevice() {
+  const smallViewport = window.innerWidth < 1024 || window.innerHeight < 620;
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const noHover = window.matchMedia('(hover: none)').matches;
+  return smallViewport || (coarsePointer && noHover);
+}
+
 function ensureAudio(){
+  if(isUnsupportedDevice()) return;
   if(!ctx)ctx=new AudioCtx();
   ctx.resume?.();
 }
@@ -169,7 +177,7 @@ function createAudioManager(paths){
     loopFades.set(name,id);
   }
   function unlock(){
-    if(unlocked)return;
+    if(unlocked || isUnsupportedDevice())return;
     unlocked=true;
     startLoop('start_background',.45);
   }
@@ -3797,6 +3805,37 @@ function updateUI(){
 let last=performance.now();
 let hasStarted=false;
 let startOverlayDismissed=false;
+
+
+const desktopGate = document.getElementById('desktopOnlyGate');
+const copyGameLinkBtn = document.getElementById('copyGameLinkBtn');
+
+
+
+function updateDesktopGate() {
+  if (!desktopGate) return;
+
+  const blocked = isUnsupportedDevice();
+  desktopGate.hidden = !blocked;
+
+  document.body.classList.toggle('desktop-gated', blocked);
+}
+
+copyGameLinkBtn?.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    copyGameLinkBtn.textContent = 'LINK COPIED';
+    setTimeout(() => {
+      copyGameLinkBtn.textContent = 'COPY GAME LINK';
+    }, 1400);
+  } catch {
+    copyGameLinkBtn.textContent = 'COPY FAILED';
+  }
+});
+
+updateDesktopGate();
+window.addEventListener('resize', updateDesktopGate);
+window.addEventListener('orientationchange', updateDesktopGate);
 
 function initStartScreen(){
   const startScreen=document.getElementById('startScreen');

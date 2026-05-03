@@ -171,12 +171,7 @@ function createAudioManager(paths){
   function unlock(){
     if(unlocked)return;
     unlocked=true;
-    startLoop('engine_loop',.25);
-    startLoop('wind_loop',.12);
-    startLoop('distant_battle_loop',.08);
-    stopLoop('music_base_loop');
-    startLoop('music_elevenlabs_loop',musicVolumeConfig.gameplay);
-    startLoop('engine_damaged_loop',0);
+    startLoop('start_background',.45);
   }
   return {play,playPanned,playRandom:(names,volume=1,useFallback=true,playbackRate=1)=>play(names[Math.floor(Math.random()*names.length)],volume,useFallback,playbackRate),startLoop,stopLoop,setLoopVolume,setLoopPlaybackRate,fadeLoop,unlock,get unlocked(){return unlocked;}};
 }
@@ -194,6 +189,7 @@ const audio=createAudioManager({
   music_base_loop:'audio/music/music_base_loop.mp3',
   music_alt_loop:'audio/music/music_alt_loop.mp3',
   music_elevenlabs_loop:'audio/music/gameplay_background.mp3',
+  start_background:'audio/music/start_background.mp3',
   repair_fail:'audio/repair/repair_fail.mp3',
   repair_good:'audio/repair/repair_good.mp3',
   repair_loop:'audio/repair/repair_loop.mp3',
@@ -3355,6 +3351,7 @@ function resetGame(){
   audio.setLoopPlaybackRate('engine_damaged_loop',1);
   audio.setLoopPlaybackRate('music_elevenlabs_loop',1);
   if(audio.unlocked){
+    audio.stopLoop('start_background');
     audio.startLoop('engine_loop',.25);
     audio.startLoop('wind_loop',.12);
     audio.startLoop('distant_battle_loop',.08);
@@ -3799,6 +3796,15 @@ function initStartScreen(){
     startScreen.classList.add('hidden');
     ensureAudio();
     audio.unlock();
+    if(audio.unlocked){
+      audio.stopLoop('start_background');
+      audio.startLoop('engine_loop',.25);
+      audio.startLoop('wind_loop',.12);
+      audio.startLoop('distant_battle_loop',.08);
+      audio.stopLoop('music_base_loop');
+      audio.startLoop('music_elevenlabs_loop',musicVolumeConfig.gameplay);
+      audio.startLoop('engine_damaged_loop',0);
+    }
     player.startTime=performance.now();
     player.survival=0;
   }
@@ -3810,6 +3816,17 @@ function initStartScreen(){
       startGame();
     }
   });
+
+  const interactionUnlock=()=>{
+    if(!audio.unlocked&&!hasStarted){
+      ensureAudio();
+      audio.unlock();
+    }
+    window.removeEventListener('mousedown',interactionUnlock);
+    window.removeEventListener('keydown',interactionUnlock);
+  };
+  window.addEventListener('mousedown',interactionUnlock);
+  window.addEventListener('keydown',interactionUnlock);
 }
 initStartScreen();
 

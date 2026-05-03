@@ -72,19 +72,91 @@
   </div>
   <div id="controls" class="start-hint">WASD move · LMB/Space fire · Hold R repair</div>
 </div>
-<div id="lastStand">
-  <div id="card">
-    <div id="card-inner">
-      <h1>LAST STAND</h1>
-      <div id="resultLine">You went down fighting.</div>
-      <div id="recordBadges" class="record-badges" aria-live="polite"></div>
-      <div class="stats">
-        <div class="stat"><b id="finalTime">0.0s</b><span>Survival Time</span></div>
-        <div class="stat"><b id="finalKills">0</b><span>Planes Downed</span></div>
-        <div class="stat"><b id="finalCombo">x0</b><span>Max Repair Combo</span></div>
-        <div class="stat"><b id="finalNear">0</b><span>Near Misses</span></div>
+<div id="lastStand" class="results-overlay" aria-live="polite">
+  <div id="card" class="results-panel" role="dialog" aria-modal="true" aria-labelledby="resultsTitle">
+    <div id="card-inner" class="results-panel-inner">
+      <div class="results-embers" aria-hidden="true"></div>
+      <div class="results-hud-lines" aria-hidden="true"></div>
+      <img class="results-crest" src="assets/results/results_ace_crest.png" alt="">
+      <h1 id="resultsTitle" class="results-title">FINAL SORTIE</h1>
+      <div id="resultLine" class="results-subtitle">Mission result · Score 0</div>
+
+      <div class="results-score-block">
+        <div class="results-score-label"><span></span>SCORE<span></span></div>
+        <div class="results-score-laurels" aria-hidden="true">
+          <img class="results-laurel results-laurel-left" src="assets/results/results_laurel_left.png" alt="">
+          <img class="results-laurel results-laurel-right" src="assets/results/results_laurel_right.png" alt="">
+        </div>
+        <b id="finalScore" class="results-score-value">0</b>
       </div>
-      <button id="restart">Fly Again</button>
+
+      <div id="resultsStats" class="results-stats">
+        <div class="results-stat-row" data-stat="time">
+          <img class="results-stat-icon" src="assets/results/results_badge_survival.png" alt="">
+          <div class="results-stat-copy">
+            <div class="results-stat-top">
+              <span class="results-stat-label">Survival Time</span>
+              <b id="finalTime" class="results-stat-value">0.0s</b>
+            </div>
+            <div class="results-stat-mid">
+              <span class="results-stat-milestone">Next milestone: 30s</span>
+              <span class="results-record-ribbon" aria-hidden="true">NEW RECORD!<img src="assets/results/results_record_star.png" alt=""></span>
+            </div>
+            <div class="results-progress"><span></span></div>
+          </div>
+        </div>
+        <div class="results-stat-row" data-stat="kills">
+          <img class="results-stat-icon" src="assets/results/results_badge_kills.png" alt="">
+          <div class="results-stat-copy">
+            <div class="results-stat-top">
+              <span class="results-stat-label">Planes Downed</span>
+              <b id="finalKills" class="results-stat-value">0</b>
+            </div>
+            <div class="results-stat-mid">
+              <span class="results-stat-milestone">Next milestone: 10</span>
+              <span class="results-record-ribbon" aria-hidden="true">NEW RECORD!<img src="assets/results/results_record_star.png" alt=""></span>
+            </div>
+            <div class="results-progress"><span></span></div>
+          </div>
+        </div>
+        <div class="results-stat-row" data-stat="combo">
+          <img class="results-stat-icon" src="assets/results/results_badge_combo.png" alt="">
+          <div class="results-stat-copy">
+            <div class="results-stat-top">
+              <span class="results-stat-label">Max Combo</span>
+              <b id="finalCombo" class="results-stat-value">x0</b>
+            </div>
+            <div class="results-stat-mid">
+              <span class="results-stat-milestone">Next milestone: x15</span>
+              <span class="results-record-ribbon" aria-hidden="true">NEW RECORD!<img src="assets/results/results_record_star.png" alt=""></span>
+            </div>
+            <div class="results-progress"><span></span></div>
+          </div>
+        </div>
+        <div class="results-stat-row" data-stat="near">
+          <img class="results-stat-icon" src="assets/results/results_badge_nearmiss.png" alt="">
+          <div class="results-stat-copy">
+            <div class="results-stat-top">
+              <span class="results-stat-label">Near Misses</span>
+              <b id="finalNear" class="results-stat-value">0</b>
+            </div>
+            <div class="results-stat-mid">
+              <span class="results-stat-milestone">Next milestone: 15</span>
+              <span class="results-record-ribbon" aria-hidden="true">NEW RECORD!<img src="assets/results/results_record_star.png" alt=""></span>
+            </div>
+            <div class="results-progress"><span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="resultsBreakdown" class="results-breakdown" aria-label="Score breakdown"></div>
+      <button id="restart" class="results-fly-button" type="button">
+        <img src="assets/results/results_button_plane.png" alt="">
+        <span>FLY AGAIN</span>
+        <img src="assets/results/results_button_plane.png" alt="">
+      </button>
+      <div id="resultsFooterHook" class="results-footer-hook">Reach x30 combo to unlock OVERDRIVE STORM</div>
+      <div id="recordBadges" class="record-badges" aria-hidden="true"></div>
     </div>
   </div>
 </div>

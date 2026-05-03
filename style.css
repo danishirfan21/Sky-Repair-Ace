@@ -865,7 +865,6 @@ body.final-stand-active #vignette{
   align-self: end;
   font-size:12px;
   font-weight:800;
-  text-transform:uppercase;
   color:rgba(229,224,211,.58);
   text-align: left;
 }

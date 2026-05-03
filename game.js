@@ -918,7 +918,7 @@ function nextMilestone(value,milestones,prefix='',suffix=''){
   const previous=[0,...milestones.filter(mark=>mark<target)].pop() ?? 0;
   const span=Math.max(1,target-previous);
   const progress=target===previous?1:THREE.MathUtils.clamp((value-previous)/span,0,1);
-  return {label:`Next milestone: ${prefix}${target}${suffix}`,progress};
+  return {label:`NEXT MILESTONE: ${prefix}${target}${suffix}`,progress};
 }
 function resultTitleAndSubtitle(){
   const finalStand=player.lastStandUsed||runStats.finalStandKills>0;

@@ -1313,20 +1313,27 @@ body.final-stand-active #vignette{
 
 .start-distant-planes {
   position: absolute;
-  top: 50%;
+  top: 51%;
   left: 50%;
   margin: 0;
-  width: clamp(200px, 30vw, 400px);
-  height: 200px;
+  width: clamp(240px, 34vw, 470px);
+  height: 240px;
   background: url('assets/start/start_distant_planes.png') no-repeat center center;
   background-size: contain;
   pointer-events: none;
+  z-index: 3;
+  filter:
+    brightness(1.45)
+    contrast(1.18)
+    saturate(1.08)
+    drop-shadow(0 0 10px rgba(255, 205, 120, 0.22))
+    drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
   animation: startDistantDrift 14s ease-in-out infinite alternate;
 }
 
 @keyframes startDistantDrift {
-  from { transform: translate(calc(-50% + 6px), calc(-50% + 3px)); opacity: 0.5; }
-  to { transform: translate(calc(-50% - 6px), calc(-50% - 3px)); opacity: 0.75; }
+  from { transform: translate(calc(-50% + 6px), calc(-50% + 3px)); opacity: 0.82; }
+  to { transform: translate(calc(-50% - 6px), calc(-50% - 3px)); opacity: 1; }
 }
 
 .start-player-plane {
@@ -1334,11 +1341,18 @@ body.final-stand-active #vignette{
   top: 59%;
   left: 50%;
   margin: 0;
-  width: clamp(240px, 23vw, 380px);
-  height: clamp(140px, 18vh, 230px);
+  width: clamp(270px, 25vw, 410px);
+  height: clamp(160px, 20vh, 250px);
   background: url('assets/start/start_player_plane.png') no-repeat center center;
   background-size: contain;
   pointer-events: none;
+  z-index: 4;
+  filter:
+    brightness(1.25)
+    contrast(1.16)
+    saturate(1.08)
+    drop-shadow(0 0 14px rgba(255, 204, 120, 0.18))
+    drop-shadow(0 16px 24px rgba(0, 0, 0, 0.62));
   animation: startPlayerBob 5s ease-in-out infinite alternate;
 }
 
@@ -1355,6 +1369,7 @@ body.final-stand-active #vignette{
   mix-blend-mode: screen;
   opacity: 0.35;
   pointer-events: none;
+  z-index: 2;
   animation: startEmbersDrift 12s ease-in-out infinite alternate;
 }
 
@@ -1396,6 +1411,7 @@ body.final-stand-active #vignette{
   --corner-inset-x: clamp(32px, 4vw, 64px);
   --corner-inset-y: clamp(30px, 4vh, 60px);
   opacity: 0.85;
+  z-index: 9;
 }
 .start-corners img {
   position: absolute;
@@ -1472,7 +1488,7 @@ body.final-stand-active #vignette{
 
 .start-features {
   position: absolute;
-  top: 43%;
+  top: 42%;
   left: 50%;
   transform: translateX(-50%);
   display: flex;

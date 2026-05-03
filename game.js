@@ -190,6 +190,7 @@ const audio=createAudioManager({
   music_alt_loop:'audio/music/music_alt_loop.mp3',
   music_elevenlabs_loop:'audio/music/gameplay_background.mp3',
   start_background:'audio/music/start_background.mp3',
+  start_button:'audio/music/start_button.mp3',
   repair_fail:'audio/repair/repair_fail.mp3',
   repair_good:'audio/repair/repair_good.mp3',
   repair_loop:'audio/repair/repair_loop.mp3',
@@ -3796,6 +3797,7 @@ function initStartScreen(){
     startScreen.classList.add('hidden');
     ensureAudio();
     audio.unlock();
+    audio.play('start_button', 0.8);
     if(audio.unlocked){
       audio.stopLoop('start_background');
       audio.startLoop('engine_loop',.25);

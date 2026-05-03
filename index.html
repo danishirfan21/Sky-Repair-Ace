@@ -9,6 +9,54 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="startScreen" class="start-screen">
+  <div class="start-bg"></div>
+  <div class="start-embers"></div>
+  <div class="start-corners">
+    <img src="assets/start/start_corner_frame_topleft.png" class="corner-tl" alt="">
+    <img src="assets/start/start_corner_frame_topright.png" class="corner-tr" alt="">
+    <img src="assets/start/start_corner_frame_bottomleft.png" class="corner-bl" alt="">
+    <img src="assets/start/start_corner_frame_bottomright.png" class="corner-br" alt="">
+  </div>
+  
+  <div class="start-content">
+    <img src="assets/start/start_crest.png" class="start-crest" alt="Crest">
+    <h1 class="start-title">SKY REPAIR ACE</h1>
+    <div class="start-subtitle">
+      <span>Repair under fire. Survive the last stand.</span>
+      <div class="start-subtitle-diamond"></div>
+    </div>
+    
+    <div class="start-features">
+      <div class="feature-chip">
+        <img src="assets/start/start_feature_nearmiss.png" alt="">
+        <span>NEAR MISS</span>
+      </div>
+      <div class="feature-chip">
+        <img src="assets/start/start_chip_repair_icon.png" alt="">
+        <span>REPAIR UNDER FIRE</span>
+      </div>
+      <div class="feature-chip">
+        <img src="assets/start/start_chip_laststand_icon.png" alt="">
+        <span>LAST STAND</span>
+      </div>
+    </div>
+    
+    <button id="startSortieBtn" class="start-button">
+      <img src="assets/start/start_button_plane_left.png" alt="">
+      <span>START SORTIE</span>
+      <img src="assets/start/start_button_plane_right.png" alt="">
+    </button>
+    
+    <div class="start-controls">
+      WASD move &middot; LMB/Space fire &middot; Hold R repair
+    </div>
+  </div>
+  
+  <div class="start-records">
+    BEST SCORE <span id="startBestScore">0</span> &middot; BEST COMBO x<span id="startBestCombo">0</span>
+  </div>
+</div>
 <div id="flash"></div><div id="compositionVignette"></div><div id="vignette"></div>
 <div id="hud">
   <div id="stateVault" aria-hidden="true">

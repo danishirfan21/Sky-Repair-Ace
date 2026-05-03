@@ -3773,6 +3773,47 @@ function updateUI(){
   updateRepairIndicator();
 }
 let last=performance.now();
+let hasStarted=false;
+let startOverlayDismissed=false;
+
+function initStartScreen(){
+  const startScreen=document.getElementById('startScreen');
+  const startBtn=document.getElementById('startSortieBtn');
+  const bestScoreEl=document.getElementById('startBestScore');
+  const bestComboEl=document.getElementById('startBestCombo');
+  
+  if(!startScreen)return;
+  
+  let bestScore=0,bestCombo=0;
+  try{
+    bestScore=parseInt(localStorage.getItem('skyRepairAce.bestScore'))||0;
+    bestCombo=parseInt(localStorage.getItem('skyRepairAce.bestCombo'))||0;
+  }catch(e){}
+  
+  if(bestScoreEl)bestScoreEl.textContent=bestScore;
+  if(bestComboEl)bestComboEl.textContent=bestCombo;
+
+  function startGame(){
+    if(hasStarted)return;
+    hasStarted=true;
+    startOverlayDismissed=true;
+    startScreen.classList.add('hidden');
+    ensureAudio();
+    audio.unlock();
+    player.startTime=performance.now();
+    player.survival=0;
+  }
+  
+  startBtn.addEventListener('click',startGame);
+  
+  window.addEventListener('keydown',e=>{
+    if((e.code==='Enter'||e.code==='Space')&&!hasStarted){
+      startGame();
+    }
+  });
+}
+initStartScreen();
+
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(freezeTimer>0){
@@ -3782,7 +3823,32 @@ function animate(now=performance.now()){
     if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}
     dt*=timeScale;
   }
-  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateWaveDirector(dt);updateFlakBarrage(dt);updateFriendlyEscorts(dt);updateSupplyDrop(dt);updateEnemies(dt);updateMines(dt);updateBullets(dt);updateCombatComboState(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateFeedbackState(dt);updateCamera(dt);environment.update(dt,player.survival);updateThreatRadar(dt);updateUI();
+  
+  updateAim(dt);
+  updatePlayerDamageEffects(dt);
+  updateAudioMix(dt);
+  updateParticles(dt);
+  updateVFX(dt);
+  updateScorePopups(dt);
+  updateFeedbackState(dt);
+  updateCamera(dt);
+  environment.update(dt,player.survival);
+  updateThreatRadar(dt);
+  updateUI();
+
+  if(hasStarted){
+    updatePlayer(dt);
+    updateWaveDirector(dt);
+    updateFlakBarrage(dt);
+    updateFriendlyEscorts(dt);
+    updateSupplyDrop(dt);
+    updateEnemies(dt);
+    updateMines(dt);
+    updateBullets(dt);
+    updateCombatComboState(dt);
+    updateAmbientCombat(dt);
+  }
+
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

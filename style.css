@@ -1286,6 +1286,7 @@ body.final-stand-active #vignette{
   justify-content: center;
   align-items: center;
   background-color: #0b1016;
+  overflow: hidden;
   transition: opacity 0.8s ease-out, visibility 0.8s;
 }
 
@@ -1297,79 +1298,164 @@ body.final-stand-active #vignette{
 
 .start-bg {
   position: absolute;
-  inset: 0;
-  background: url('assets/start/start_background.png') no-repeat center center;
+  inset: -5%;
+  background: url('assets/start/start_background.png') no-repeat center 48%;
   background-size: cover;
   opacity: 0.9;
+  pointer-events: none;
+  animation: startBgDrift 22s ease-in-out infinite alternate;
+}
+
+@keyframes startBgDrift {
+  from { transform: scale(1.02) translate(0, 0); }
+  to { transform: scale(1.05) translate(-1%, 1%); }
+}
+
+.start-distant-planes {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  width: clamp(280px, 40vw, 600px);
+  height: 200px;
+  background: url('assets/start/start_distant_planes.png') no-repeat center center;
+  background-size: contain;
+  pointer-events: none;
+  animation: startDistantDrift 14s ease-in-out infinite alternate;
+}
+
+@keyframes startDistantDrift {
+  from { transform: translate(calc(-50% + 6px), calc(-50% + 3px)); opacity: 0.75; }
+  to { transform: translate(calc(-50% - 6px), calc(-50% - 3px)); opacity: 0.95; }
+}
+
+.start-player-plane {
+  position: absolute;
+  top: 62%;
+  left: 50%;
+  margin: 0;
+  width: clamp(260px, 25vw, 440px);
+  height: clamp(160px, 20vh, 260px);
+  background: url('assets/start/start_player_plane.png') no-repeat center center;
+  background-size: contain;
+  pointer-events: none;
+  animation: startPlayerBob 5s ease-in-out infinite alternate;
+}
+
+@keyframes startPlayerBob {
+  from { transform: translate(-50%, -50%) translateY(-4px) rotate(-0.5deg); }
+  to { transform: translate(-50%, -50%) translateY(4px) rotate(0.5deg); }
 }
 
 .start-embers {
   position: absolute;
-  inset: 0;
+  inset: -10%;
   background: url('assets/start/start_ember_overlay.png') no-repeat center center;
   background-size: cover;
   mix-blend-mode: screen;
-  animation: startEmbersDrift 10s linear infinite alternate;
+  opacity: 0.35;
+  pointer-events: none;
+  animation: startEmbersDrift 12s ease-in-out infinite alternate;
+}
+
+.start-embers::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  background-size: 150%;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  animation: startEmbersDriftFast 8s ease-in-out infinite alternate-reverse;
 }
 
 @keyframes startEmbersDrift {
-  from { transform: scale(1.05) translate(10px, 10px); opacity: 0.7; }
-  to { transform: scale(1.05) translate(-10px, -10px); opacity: 1; }
+  from { transform: scale(1.05) translate(2%, 2%); }
+  to { transform: scale(1.1) translate(-2%, -2%); }
+}
+
+@keyframes startEmbersDriftFast {
+  from { transform: scale(1.1) translate(-3%, -1%); }
+  to { transform: scale(1.05) translate(3%, -3%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-bg, .start-distant-planes, .start-player-plane, .start-embers, .start-embers::after {
+    animation: none !important;
+    transform: translate(-50%, -50%) !important;
+  }
+  .start-bg, .start-embers, .start-embers::after {
+    transform: none !important;
+  }
 }
 
 .start-corners {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  --corner-inset-x: clamp(22px, 3vw, 54px);
+  --corner-inset-y: clamp(20px, 3vh, 44px);
+  opacity: 0.8;
 }
 .start-corners img {
   position: absolute;
-  width: min(400px, 25vw);
+  width: clamp(120px, 15vw, 320px);
   max-width: 100%;
 }
-.corner-tl { top: 0; left: 0; }
-.corner-tr { top: 0; right: 0; }
-.corner-bl { bottom: 0; left: 0; }
-.corner-br { bottom: 0; right: 0; }
+.corner-tl { top: var(--corner-inset-y); left: var(--corner-inset-x); }
+.corner-tr { top: var(--corner-inset-y); right: var(--corner-inset-x); }
+.corner-bl { bottom: var(--corner-inset-y); left: var(--corner-inset-x); }
+.corner-br { bottom: var(--corner-inset-y); right: var(--corner-inset-x); }
 
 .start-content {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  width: 100%;
+  pointer-events: none;
 }
 
 .start-crest {
-  width: 180px;
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(76px, 7vw, 116px);
   filter: drop-shadow(0 0 20px rgba(255, 200, 100, 0.4));
-  margin-bottom: -15px;
+  pointer-events: none;
 }
 
 .start-title {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
   margin: 0;
   font-family: 'Rajdhani', sans-serif;
-  font-size: clamp(60px, 8vw, 120px);
+  font-size: clamp(64px, 7.5vw, 116px);
   font-weight: 900;
-  line-height: 1;
+  line-height: .9;
   color: #ffd878;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   text-shadow: 0 4px 0 #6c451a, 0 0 20px rgba(255, 232, 161, 0.75), 0 0 46px rgba(255, 161, 47, 0.45);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .start-subtitle {
-  position: relative;
-  margin: 10px 0 30px;
+  position: absolute;
+  top: 32%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  pointer-events: none;
+  white-space: nowrap;
 }
 .start-subtitle span {
-  font-size: clamp(16px, 1.8vw, 22px);
+  font-size: clamp(16px, 1.5vw, 24px);
   color: #a8e6e9;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -1385,11 +1471,15 @@ body.final-stand-active #vignette{
 }
 
 .start-features {
+  position: absolute;
+  top: 43%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
-  gap: 16px;
-  margin-bottom: 50px;
+  gap: clamp(18px, 2vw, 34px);
+  pointer-events: none;
 }
 
 .feature-chip {
@@ -1397,32 +1487,37 @@ body.final-stand-active #vignette{
   align-items: center;
   gap: 12px;
   padding: 10px 24px;
+  height: clamp(46px, 5vh, 56px);
   background: linear-gradient(180deg, rgba(30,40,50,0.8), rgba(15,20,25,0.9));
   border: 1px solid rgba(255, 210, 110, 0.4);
   clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%);
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  pointer-events: auto;
 }
 
 .feature-chip img {
-  height: 24px;
+  height: clamp(24px, 3vh, 30px);
   filter: drop-shadow(0 0 8px rgba(100, 200, 255, 0.4));
 }
 
 .feature-chip span {
   color: #e0f0f5;
-  font-size: 14px;
+  font-size: clamp(12px, 1.2vw, 14px);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
 
 .start-button {
-  position: relative;
+  position: absolute;
+  top: 76%;
+  left: 50%;
+  transform: translateX(-50%);
   display: inline-grid;
   grid-template-columns: 40px auto 40px;
   align-items: center;
   gap: 24px;
-  min-width: min(480px, 80vw);
-  height: 68px;
+  width: clamp(440px, 42vw, 680px);
+  min-height: clamp(64px, 7.5vh, 88px);
   padding: 0 32px;
   border: 1px solid rgba(255, 217, 119, 0.85);
   color: #ffd77b;
@@ -1453,13 +1548,13 @@ body.final-stand-active #vignette{
 
 .start-button:hover, .start-button:focus-visible {
   filter: brightness(1.2) contrast(1.1);
-  transform: scale(1.02);
+  transform: translateX(-50%) scale(1.02);
   box-shadow: inset 0 0 32px rgba(255, 215, 112, 0.2), 0 0 40px rgba(255, 205, 88, 0.5), 0 0 80px rgba(73, 235, 246, 0.2);
   outline: none;
 }
 
 .start-button:active {
-  transform: scale(0.98);
+  transform: translateX(-50%) scale(0.98);
   filter: brightness(0.95);
 }
 
@@ -1470,19 +1565,24 @@ body.final-stand-active #vignette{
 }
 
 .start-controls {
-  margin-top: 24px;
-  font-size: 14px;
+  position: absolute;
+  top: 88%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(14px, 1.5vw, 18px);
   color: rgba(220, 230, 240, 0.6);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .start-records {
   position: absolute;
-  bottom: 30px;
-  right: 40px;
-  font-size: 14px;
+  bottom: clamp(24px, 4vh, 54px);
+  right: clamp(24px, 4vw, 64px);
+  font-size: clamp(12px, 1.2vw, 14px);
   font-weight: 700;
   color: rgba(255, 215, 120, 0.8);
   letter-spacing: 0.1em;
@@ -1495,13 +1595,18 @@ body.final-stand-active #vignette{
   text-shadow: 0 0 8px rgba(255,255,255,0.5);
 }
 
-@media (max-width: 900px), (max-height: 700px) {
-  .start-title { font-size: clamp(48px, 10vw, 80px); }
-  .start-crest { width: 120px; }
-  .start-features { flex-direction: column; align-items: center; gap: 10px; margin-bottom: 30px; }
-  .feature-chip { padding: 6px 16px; }
-  .start-records { bottom: 15px; right: 15px; font-size: 12px; }
-  .start-controls { font-size: 12px; }
+@media (max-height: 760px) and (min-width: 901px) {
+  .start-player-plane { top: 60%; width: 220px; }
+  .start-button { top: 78%; min-height: 56px; }
+  .start-controls { top: 91%; }
+}
+
+@media (max-width: 900px) {
+  .start-features { flex-direction: column; align-items: center; gap: 10px; top: 40%; }
+  .feature-chip { padding: 6px 16px; height: 38px; }
+  .start-player-plane { top: 64%; }
+  .start-button { width: 85vw; min-height: 56px; font-size: 28px; top: 80%; }
+  .start-controls { font-size: 12px; top: 92%; }
 }
 
 @media (max-width: 600px) {

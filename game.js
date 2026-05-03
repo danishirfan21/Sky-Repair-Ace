@@ -52,10 +52,17 @@ window.addEventListener('resize',()=>{
 
 // Audio
 const AudioCtx=window.AudioContext||window.webkitAudioContext;let ctx;
+function isUnsupportedDevice() {
+  const smallViewport = window.innerWidth < 1024 || window.innerHeight < 620;
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const noHover = window.matchMedia('(hover: none)').matches;
+  return smallViewport || (coarsePointer && noHover);
+}
+
 function ensureAudio(){
+  if(isUnsupportedDevice()) return;
   if(!ctx)ctx=new AudioCtx();
   ctx.resume?.();
-  audio.unlock();
 }
 function beep(freq=440,dur=.08,g=.045,type='sine'){
   if(!ctx)return;const o=ctx.createOscillator(),gn=ctx.createGain();o.type=type;o.frequency.value=freq;
@@ -170,14 +177,9 @@ function createAudioManager(paths){
     loopFades.set(name,id);
   }
   function unlock(){
-    if(unlocked)return;
+    if(unlocked || isUnsupportedDevice())return;
     unlocked=true;
-    startLoop('engine_loop',.25);
-    startLoop('wind_loop',.12);
-    startLoop('distant_battle_loop',.08);
-    stopLoop('music_base_loop');
-    startLoop('music_elevenlabs_loop',musicVolumeConfig.gameplay);
-    startLoop('engine_damaged_loop',0);
+    startLoop('start_background',.45);
   }
   return {play,playPanned,playRandom:(names,volume=1,useFallback=true,playbackRate=1)=>play(names[Math.floor(Math.random()*names.length)],volume,useFallback,playbackRate),startLoop,stopLoop,setLoopVolume,setLoopPlaybackRate,fadeLoop,unlock,get unlocked(){return unlocked;}};
 }
@@ -195,6 +197,10 @@ const audio=createAudioManager({
   music_base_loop:'audio/music/music_base_loop.mp3',
   music_alt_loop:'audio/music/music_alt_loop.mp3',
   music_elevenlabs_loop:'audio/music/gameplay_background.mp3',
+  start_background:'audio/music/start_background.mp3',
+  start_button:'audio/music/start_button.mp3',
+  hit_marker:'audio/music/shoot_sound.mp3',
+  play_again:'audio/music/play_again.mp3',
   repair_fail:'audio/repair/repair_fail.mp3',
   repair_good:'audio/repair/repair_good.mp3',
   repair_loop:'audio/repair/repair_loop.mp3',
@@ -919,7 +925,7 @@ function nextMilestone(value,milestones,prefix='',suffix=''){
   const previous=[0,...milestones.filter(mark=>mark<target)].pop() ?? 0;
   const span=Math.max(1,target-previous);
   const progress=target===previous?1:THREE.MathUtils.clamp((value-previous)/span,0,1);
-  return {label:`Next milestone: ${prefix}${target}${suffix}`,progress};
+  return {label:`NEXT MILESTONE: ${prefix}${target}${suffix}`,progress};
 }
 function resultTitleAndSubtitle(){
   const finalStand=player.lastStandUsed||runStats.finalStandKills>0;
@@ -2321,6 +2327,7 @@ const ui={};
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
 ui.reticle=document.getElementById('aimReticle');
+ui.hitMarker=document.getElementById('hitMarker');
 ui.overcharge=document.createElement('div');
 ui.overcharge.id='overchargeIndicator';
 ui.overcharge.textContent='OVERCHARGE';
@@ -2861,7 +2868,9 @@ function updateCombatComboState(dt){
   if(combatComboState.hitTimer<=0)combatComboState.hitCount=0;
 }
 
+const hitMarkerTimers={hit:null,kill:null};
 const reticleTimers={fire:null,hit:null,kill:null,chain:null};
+
 function restartReticlePulse(cls,duration){
   if(!ui.reticle)return;
   if(reticleTimers[cls])clearTimeout(reticleTimers[cls]);
@@ -2873,20 +2882,39 @@ function restartReticlePulse(cls,duration){
     reticleTimers[cls]=null;
   },duration);
 }
+
+function triggerHitMarker(isKill=false){
+  if(!ui.hitMarker)return;
+  if(hitMarkerTimers.hit)clearTimeout(hitMarkerTimers.hit);
+  if(hitMarkerTimers.kill)clearTimeout(hitMarkerTimers.kill);
+  ui.hitMarker.classList.remove('animate','kill');
+  void ui.hitMarker.offsetWidth;
+  if(isKill)ui.hitMarker.classList.add('kill');
+  ui.hitMarker.classList.add('animate');
+  audio.play('hit_marker', isKill ? 0.35 : 0.22, false, isKill ? 0.85 : 1.05);
+  hitMarkerTimers.hit=setTimeout(()=>{
+    if(ui.hitMarker)ui.hitMarker.classList.remove('animate','kill');
+    hitMarkerTimers.hit=null;
+  },isKill?280:180);
+}
+
 function pulseReticleFire(){
   restartReticlePulse('fire',80);
 }
 function pulseReticleHit(){
   if(ui.reticle)ui.reticle.classList.remove('fire');
   restartReticlePulse('hit',170);
+  triggerHitMarker(false);
 }
 function pulseReticleChain(){
   if(ui.reticle)ui.reticle.classList.remove('fire','hit');
   restartReticlePulse('chain',210);
+  triggerHitMarker(false);
 }
 function pulseReticleKill(){
   if(ui.reticle)ui.reticle.classList.remove('fire','hit','chain');
   restartReticlePulse('kill',270);
+  triggerHitMarker(true);
 }
 const reticleProbe=new THREE.Vector3();
 function updateReticleState(){
@@ -3333,6 +3361,7 @@ function endGame(){
 }
 function resetGame(){
   runToken++;
+  audio.play('play_again', 0.8);
   releaseMouseCapture();
   endRepair();
   clearResultAnimations();
@@ -3356,6 +3385,7 @@ function resetGame(){
   audio.setLoopPlaybackRate('engine_damaged_loop',1);
   audio.setLoopPlaybackRate('music_elevenlabs_loop',1);
   if(audio.unlocked){
+    audio.stopLoop('start_background');
     audio.startLoop('engine_loop',.25);
     audio.startLoop('wind_loop',.12);
     audio.startLoop('distant_battle_loop',.08);
@@ -3773,6 +3803,99 @@ function updateUI(){
   updateRepairIndicator();
 }
 let last=performance.now();
+let hasStarted=false;
+let startOverlayDismissed=false;
+
+
+const desktopGate = document.getElementById('desktopOnlyGate');
+const copyGameLinkBtn = document.getElementById('copyGameLinkBtn');
+
+
+
+function updateDesktopGate() {
+  if (!desktopGate) return;
+
+  const blocked = isUnsupportedDevice();
+  desktopGate.hidden = !blocked;
+
+  document.body.classList.toggle('desktop-gated', blocked);
+}
+
+copyGameLinkBtn?.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    copyGameLinkBtn.textContent = 'LINK COPIED';
+    setTimeout(() => {
+      copyGameLinkBtn.textContent = 'COPY GAME LINK';
+    }, 1400);
+  } catch {
+    copyGameLinkBtn.textContent = 'COPY FAILED';
+  }
+});
+
+updateDesktopGate();
+window.addEventListener('resize', updateDesktopGate);
+window.addEventListener('orientationchange', updateDesktopGate);
+
+function initStartScreen(){
+  const startScreen=document.getElementById('startScreen');
+  const startBtn=document.getElementById('startSortieBtn');
+  const bestScoreEl=document.getElementById('startBestScore');
+  const bestComboEl=document.getElementById('startBestCombo');
+  
+  if(!startScreen)return;
+  
+  let bestScore=0,bestCombo=0;
+  try{
+    bestScore=parseInt(localStorage.getItem('skyRepairAce.bestScore'))||0;
+    bestCombo=parseInt(localStorage.getItem('skyRepairAce.bestCombo'))||0;
+  }catch(e){}
+  
+  if(bestScoreEl)bestScoreEl.textContent=bestScore;
+  if(bestComboEl)bestComboEl.textContent=bestCombo;
+
+  function startGame(){
+    if(hasStarted)return;
+    hasStarted=true;
+    startOverlayDismissed=true;
+    startScreen.classList.add('hidden');
+    ensureAudio();
+    audio.unlock();
+    audio.play('start_button', 0.8);
+    if(audio.unlocked){
+      audio.stopLoop('start_background');
+      audio.startLoop('engine_loop',.25);
+      audio.startLoop('wind_loop',.12);
+      audio.startLoop('distant_battle_loop',.08);
+      audio.stopLoop('music_base_loop');
+      audio.startLoop('music_elevenlabs_loop',musicVolumeConfig.gameplay);
+      audio.startLoop('engine_damaged_loop',0);
+    }
+    player.startTime=performance.now();
+    player.survival=0;
+  }
+  
+  startBtn.addEventListener('click',startGame);
+  
+  window.addEventListener('keydown',e=>{
+    if((e.code==='Enter'||e.code==='Space')&&!hasStarted){
+      startGame();
+    }
+  });
+
+  const interactionUnlock=()=>{
+    if(!audio.unlocked&&!hasStarted){
+      ensureAudio();
+      audio.unlock();
+    }
+    window.removeEventListener('mousedown',interactionUnlock);
+    window.removeEventListener('keydown',interactionUnlock);
+  };
+  window.addEventListener('mousedown',interactionUnlock);
+  window.addEventListener('keydown',interactionUnlock);
+}
+initStartScreen();
+
 function animate(now=performance.now()){
   requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.033);last=now;
   if(freezeTimer>0){
@@ -3782,7 +3905,32 @@ function animate(now=performance.now()){
     if(slowTimer>0){slowTimer-=dt;if(slowTimer<=0)timeScale=1;}
     dt*=timeScale;
   }
-  updateAim(dt);updatePlayer(dt);updatePlayerDamageEffects(dt);updateAudioMix(dt);updateWaveDirector(dt);updateFlakBarrage(dt);updateFriendlyEscorts(dt);updateSupplyDrop(dt);updateEnemies(dt);updateMines(dt);updateBullets(dt);updateCombatComboState(dt);updateAmbientCombat(dt);updateParticles(dt);updateVFX(dt);updateScorePopups(dt);updateFeedbackState(dt);updateCamera(dt);environment.update(dt,player.survival);updateThreatRadar(dt);updateUI();
+  
+  updateAim(dt);
+  updatePlayerDamageEffects(dt);
+  updateAudioMix(dt);
+  updateParticles(dt);
+  updateVFX(dt);
+  updateScorePopups(dt);
+  updateFeedbackState(dt);
+  updateCamera(dt);
+  environment.update(dt,player.survival);
+  updateThreatRadar(dt);
+  updateUI();
+
+  if(hasStarted){
+    updatePlayer(dt);
+    updateWaveDirector(dt);
+    updateFlakBarrage(dt);
+    updateFriendlyEscorts(dt);
+    updateSupplyDrop(dt);
+    updateEnemies(dt);
+    updateMines(dt);
+    updateBullets(dt);
+    updateCombatComboState(dt);
+    updateAmbientCombat(dt);
+  }
+
   if(composer)composer.render();else renderer.render(scene,camera);
 }
 animate();

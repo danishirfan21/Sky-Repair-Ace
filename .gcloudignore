@@ -1,0 +1,10 @@
+.gcloudignore
+.git
+.gitignore
+node_modules
+dist
+runtime-*.png
+vite-dev*.log
+.chrome-repair-check
+README.md
+package-lock.json

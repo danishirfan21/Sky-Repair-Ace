@@ -9,6 +9,75 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="desktopOnlyGate" class="desktop-gate" hidden>
+  <div class="desktop-gate-panel">
+    <div class="desktop-gate-icon">✈</div>
+    <h1>DESKTOP REQUIRED</h1>
+    <p>
+      Sky Repair Ace is built for keyboard + mouse air combat.
+      Please open this game on a desktop or laptop browser.
+    </p>
+    <div class="desktop-gate-spec">
+      Recommended: Chrome / Edge · 1366×768 or larger
+    </div>
+    <button id="copyGameLinkBtn" class="desktop-gate-button">
+      COPY GAME LINK
+    </button>
+  </div>
+</div>
+<div id="startScreen" class="start-screen">
+  <div class="start-bg"></div>
+  <div class="start-distant-planes"></div>
+  <div class="start-player-plane"></div>
+  <div class="start-embers"></div>
+  <div class="start-corners">
+    <img src="assets/start/start_corner_frame_topleft.png" class="corner-tl" alt="">
+    <img src="assets/start/start_corner_frame_topright.png" class="corner-tr" alt="">
+    <img src="assets/start/start_corner_frame_bottomleft.png" class="corner-bl" alt="">
+  </div>
+  
+  <div class="start-content">
+    <div class="start-top-group">
+      <img src="assets/start/start_crest.png" class="start-crest" alt="Crest">
+      <h1 class="start-title">SKY REPAIR ACE</h1>
+      <div class="start-subtitle">
+        <span>Repair under fire. Survive the last stand.</span>
+        <div class="start-subtitle-diamond"></div>
+      </div>
+      
+      <div class="start-features">
+        <div class="feature-chip">
+          <img src="assets/start/start_feature_nearmiss.png" alt="">
+          <span>NEAR MISS</span>
+        </div>
+        <div class="feature-chip">
+          <img src="assets/start/start_chip_repair_icon.png" alt="">
+          <span>REPAIR UNDER FIRE</span>
+        </div>
+        <div class="feature-chip">
+          <img src="assets/start/start_chip_laststand_icon.png" alt="">
+          <span>LAST STAND</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="start-bottom-group">
+      <button id="startSortieBtn" class="start-button">
+        <img src="assets/start/start_button_plane_left.png" alt="">
+        <span>START SORTIE</span>
+        <img src="assets/start/start_button_plane_right.png" alt="">
+      </button>
+      
+      <div class="start-controls">
+        WASD move &middot; LMB/Space fire &middot; Hold R repair
+      </div>
+    </div>
+  </div>
+  
+  <div class="start-records">
+    BEST SCORE <span id="startBestScore">0</span> &middot; BEST COMBO x<span id="startBestCombo">0</span>
+  </div>
+</div>
 <div id="flash"></div><div id="compositionVignette"></div><div id="vignette"></div>
 <div id="hud">
   <div id="stateVault" aria-hidden="true">
@@ -59,6 +128,12 @@
     <span class="reticle-tick"></span>
     <span class="reticle-tick"></span>
     <span class="reticle-tick"></span>
+    <div id="hitMarker" class="hit-marker">
+      <span class="hit-line"></span>
+      <span class="hit-line"></span>
+      <span class="hit-line"></span>
+      <span class="hit-line"></span>
+    </div>
   </div>
   <div id="rewardFeed" aria-hidden="true"></div>
   <div id="warn">CRITICAL</div>

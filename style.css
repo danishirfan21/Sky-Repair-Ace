@@ -784,13 +784,13 @@ body.final-stand-active #vignette{
 
 .results-laurel-left{
   right:50%;
-  margin-right:74px;
+  margin-right:98px;
   transform:translateY(-50%);
 }
 
 .results-laurel-right{
   left:50%;
-  margin-left:74px;
+  margin-left:98px;
   transform:translateY(-50%) scale(.96);
 }
 .results-stats{
@@ -1196,11 +1196,11 @@ body.final-stand-active #vignette{
   }
 
   .results-laurel-left{
-    margin-right:62px;
+    margin-right:88px;
   }
 
   .results-laurel-right{
-    margin-left:62px;
+    margin-left:88px;
   }
 
   .results-stats{

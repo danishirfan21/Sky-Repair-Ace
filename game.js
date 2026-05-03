@@ -55,7 +55,6 @@ const AudioCtx=window.AudioContext||window.webkitAudioContext;let ctx;
 function ensureAudio(){
   if(!ctx)ctx=new AudioCtx();
   ctx.resume?.();
-  audio.unlock();
 }
 function beep(freq=440,dur=.08,g=.045,type='sine'){
   if(!ctx)return;const o=ctx.createOscillator(),gn=ctx.createGain();o.type=type;o.frequency.value=freq;

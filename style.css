@@ -1338,7 +1338,7 @@ body.final-stand-active #vignette{
 
 .start-player-plane {
   position: absolute;
-  top: 61.5%;
+  top: 63%;
   left: 50%;
   margin: 0;
   width: clamp(270px, 25vw, 410px);
@@ -1655,7 +1655,7 @@ body.final-stand-active #vignette{
   }
 
   .start-player-plane {
-    top: 61.5%;
+    top: 63%;
     width: clamp(230px, 22vw, 360px);
   }
 

@@ -1299,7 +1299,7 @@ body.final-stand-active #vignette{
 .start-bg {
   position: absolute;
   inset: -5%;
-  background: url('assets/start/start_background.png') no-repeat center 48%;
+  background: url('assets/start/start_background.png') no-repeat center 30%;
   background-size: cover;
   opacity: 0.9;
   pointer-events: none;
@@ -1313,10 +1313,10 @@ body.final-stand-active #vignette{
 
 .start-distant-planes {
   position: absolute;
-  top: 50%;
+  top: 45%;
   left: 50%;
   margin: 0;
-  width: clamp(280px, 40vw, 600px);
+  width: clamp(200px, 30vw, 400px);
   height: 200px;
   background: url('assets/start/start_distant_planes.png') no-repeat center center;
   background-size: contain;
@@ -1325,17 +1325,17 @@ body.final-stand-active #vignette{
 }
 
 @keyframes startDistantDrift {
-  from { transform: translate(calc(-50% + 6px), calc(-50% + 3px)); opacity: 0.75; }
-  to { transform: translate(calc(-50% - 6px), calc(-50% - 3px)); opacity: 0.95; }
+  from { transform: translate(calc(-50% + 6px), calc(-50% + 3px)); opacity: 0.5; }
+  to { transform: translate(calc(-50% - 6px), calc(-50% - 3px)); opacity: 0.75; }
 }
 
 .start-player-plane {
   position: absolute;
-  top: 62%;
+  top: 68%;
   left: 50%;
   margin: 0;
-  width: clamp(260px, 25vw, 440px);
-  height: clamp(160px, 20vh, 260px);
+  width: clamp(220px, 20vw, 360px);
+  height: clamp(140px, 18vh, 220px);
   background: url('assets/start/start_player_plane.png') no-repeat center center;
   background-size: contain;
   pointer-events: none;
@@ -1393,9 +1393,9 @@ body.final-stand-active #vignette{
   position: absolute;
   inset: 0;
   pointer-events: none;
-  --corner-inset-x: clamp(22px, 3vw, 54px);
-  --corner-inset-y: clamp(20px, 3vh, 44px);
-  opacity: 0.8;
+  --corner-inset-x: clamp(32px, 4vw, 64px);
+  --corner-inset-y: clamp(30px, 4vh, 60px);
+  opacity: 0.85;
 }
 .start-corners img {
   position: absolute;
@@ -1416,22 +1416,22 @@ body.final-stand-active #vignette{
 
 .start-crest {
   position: absolute;
-  top: 12%;
+  top: 10%;
   left: 50%;
   transform: translateX(-50%);
-  width: clamp(76px, 7vw, 116px);
+  width: clamp(70px, 6vw, 100px);
   filter: drop-shadow(0 0 20px rgba(255, 200, 100, 0.4));
   pointer-events: none;
 }
 
 .start-title {
   position: absolute;
-  top: 18%;
+  top: 20%;
   left: 50%;
   transform: translateX(-50%);
   margin: 0;
   font-family: 'Rajdhani', sans-serif;
-  font-size: clamp(64px, 7.5vw, 116px);
+  font-size: clamp(52px, 6vw, 96px);
   font-weight: 900;
   line-height: .9;
   color: #ffd878;
@@ -1444,18 +1444,18 @@ body.final-stand-active #vignette{
 
 .start-subtitle {
   position: absolute;
-  top: 32%;
+  top: 36%;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   pointer-events: none;
   white-space: nowrap;
 }
 .start-subtitle span {
-  font-size: clamp(16px, 1.5vw, 24px);
+  font-size: clamp(14px, 1.2vw, 20px);
   color: #a8e6e9;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -1472,13 +1472,13 @@ body.final-stand-active #vignette{
 
 .start-features {
   position: absolute;
-  top: 43%;
+  top: 45%;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: clamp(18px, 2vw, 34px);
+  gap: clamp(12px, 1.5vw, 24px);
   pointer-events: none;
 }
 
@@ -1486,8 +1486,8 @@ body.final-stand-active #vignette{
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 24px;
-  height: clamp(46px, 5vh, 56px);
+  padding: 8px 20px;
+  height: clamp(42px, 4.5vh, 52px);
   background: linear-gradient(180deg, rgba(30,40,50,0.8), rgba(15,20,25,0.9));
   border: 1px solid rgba(255, 210, 110, 0.4);
   clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%);
@@ -1509,21 +1509,21 @@ body.final-stand-active #vignette{
 
 .start-button {
   position: absolute;
-  top: 76%;
+  top: 78%;
   left: 50%;
   transform: translateX(-50%);
   display: inline-grid;
   grid-template-columns: 40px auto 40px;
   align-items: center;
   gap: 24px;
-  width: clamp(440px, 42vw, 680px);
-  min-height: clamp(64px, 7.5vh, 88px);
+  width: clamp(380px, 35vw, 560px);
+  min-height: clamp(68px, 8vh, 92px);
   padding: 0 32px;
   border: 1px solid rgba(255, 217, 119, 0.85);
   color: #ffd77b;
   background: linear-gradient(180deg, rgba(52, 38, 22, 0.9), rgba(15, 16, 16, 0.85));
   font-family: 'Rajdhani', sans-serif;
-  font-size: clamp(32px, 4vw, 44px);
+  font-size: clamp(28px, 3vw, 40px);
   line-height: 1;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -1566,22 +1566,23 @@ body.final-stand-active #vignette{
 
 .start-controls {
   position: absolute;
-  top: 88%;
+  top: 90%;
   left: 50%;
   transform: translateX(-50%);
-  font-size: clamp(14px, 1.5vw, 18px);
+  font-size: clamp(12px, 1vw, 15px);
   color: rgba(220, 230, 240, 0.6);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-family: 'Inter', sans-serif;
   white-space: nowrap;
+  opacity: 0.5;
   pointer-events: none;
 }
 
 .start-records {
   position: absolute;
-  bottom: clamp(24px, 4vh, 54px);
-  right: clamp(24px, 4vw, 64px);
+  bottom: clamp(36px, 5vh, 64px);
+  right: clamp(40px, 5vw, 72px);
   font-size: clamp(12px, 1.2vw, 14px);
   font-weight: 700;
   color: rgba(255, 215, 120, 0.8);

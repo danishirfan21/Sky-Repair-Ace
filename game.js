@@ -191,6 +191,8 @@ const audio=createAudioManager({
   music_elevenlabs_loop:'audio/music/gameplay_background.mp3',
   start_background:'audio/music/start_background.mp3',
   start_button:'audio/music/start_button.mp3',
+  hit_marker:'audio/music/shoot_sound.mp3',
+  play_again:'audio/music/play_again.mp3',
   repair_fail:'audio/repair/repair_fail.mp3',
   repair_good:'audio/repair/repair_good.mp3',
   repair_loop:'audio/repair/repair_loop.mp3',
@@ -2317,6 +2319,7 @@ const ui={};
 .forEach(id=>ui[id]=document.getElementById(id));
 ui.box=document.getElementById('repairBox');
 ui.reticle=document.getElementById('aimReticle');
+ui.hitMarker=document.getElementById('hitMarker');
 ui.overcharge=document.createElement('div');
 ui.overcharge.id='overchargeIndicator';
 ui.overcharge.textContent='OVERCHARGE';
@@ -2857,7 +2860,9 @@ function updateCombatComboState(dt){
   if(combatComboState.hitTimer<=0)combatComboState.hitCount=0;
 }
 
+const hitMarkerTimers={hit:null,kill:null};
 const reticleTimers={fire:null,hit:null,kill:null,chain:null};
+
 function restartReticlePulse(cls,duration){
   if(!ui.reticle)return;
   if(reticleTimers[cls])clearTimeout(reticleTimers[cls]);
@@ -2869,20 +2874,39 @@ function restartReticlePulse(cls,duration){
     reticleTimers[cls]=null;
   },duration);
 }
+
+function triggerHitMarker(isKill=false){
+  if(!ui.hitMarker)return;
+  if(hitMarkerTimers.hit)clearTimeout(hitMarkerTimers.hit);
+  if(hitMarkerTimers.kill)clearTimeout(hitMarkerTimers.kill);
+  ui.hitMarker.classList.remove('animate','kill');
+  void ui.hitMarker.offsetWidth;
+  if(isKill)ui.hitMarker.classList.add('kill');
+  ui.hitMarker.classList.add('animate');
+  audio.play('hit_marker', isKill ? 0.35 : 0.22, false, isKill ? 0.85 : 1.05);
+  hitMarkerTimers.hit=setTimeout(()=>{
+    if(ui.hitMarker)ui.hitMarker.classList.remove('animate','kill');
+    hitMarkerTimers.hit=null;
+  },isKill?280:180);
+}
+
 function pulseReticleFire(){
   restartReticlePulse('fire',80);
 }
 function pulseReticleHit(){
   if(ui.reticle)ui.reticle.classList.remove('fire');
   restartReticlePulse('hit',170);
+  triggerHitMarker(false);
 }
 function pulseReticleChain(){
   if(ui.reticle)ui.reticle.classList.remove('fire','hit');
   restartReticlePulse('chain',210);
+  triggerHitMarker(false);
 }
 function pulseReticleKill(){
   if(ui.reticle)ui.reticle.classList.remove('fire','hit','chain');
   restartReticlePulse('kill',270);
+  triggerHitMarker(true);
 }
 const reticleProbe=new THREE.Vector3();
 function updateReticleState(){
@@ -3329,6 +3353,7 @@ function endGame(){
 }
 function resetGame(){
   runToken++;
+  audio.play('play_again', 0.8);
   releaseMouseCapture();
   endRepair();
   clearResultAnimations();

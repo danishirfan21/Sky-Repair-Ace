@@ -693,7 +693,7 @@ body.final-stand-active #vignette{
 .results-panel-inner::before{top:17px}
 .results-embers{
   position:absolute;inset:-12px;pointer-events:none;opacity:.22;
-  background-image:url("assets/results/results_embers_sheet.png");
+  background-image:url("/assets/results/results_embers_sheet.png");
   background-size:360px auto;background-repeat:repeat;mix-blend-mode:screen;
   animation:resultsEmbers 9s linear infinite;
 }
@@ -1327,7 +1327,7 @@ body.final-stand-active #vignette{
 .start-bg {
   position: absolute;
   inset: -5%;
-  background: url('assets/start/start_background.png') no-repeat center 30%;
+  background: url('/assets/start/start_background.png') no-repeat center 30%;
   background-size: cover;
   opacity: 0.9;
   pointer-events: none;
@@ -1346,7 +1346,7 @@ body.final-stand-active #vignette{
   margin: 0;
   width: clamp(240px, 34vw, 470px);
   height: 240px;
-  background: url('assets/start/start_distant_planes.png') no-repeat center center;
+  background: url('/assets/start/start_distant_planes.png') no-repeat center center;
   background-size: contain;
   pointer-events: none;
   z-index: 3;

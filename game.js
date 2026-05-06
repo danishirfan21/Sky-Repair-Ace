@@ -3809,9 +3809,6 @@ let startOverlayDismissed=false;
 
 
 const desktopGate = document.getElementById('desktopOnlyGate');
-const copyGameLinkBtn = document.getElementById('copyGameLinkBtn');
-
-
 
 function updateDesktopGate() {
   if (!desktopGate) return;
@@ -3821,18 +3818,6 @@ function updateDesktopGate() {
 
   document.body.classList.toggle('desktop-gated', blocked);
 }
-
-copyGameLinkBtn?.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(window.location.href);
-    copyGameLinkBtn.textContent = 'LINK COPIED';
-    setTimeout(() => {
-      copyGameLinkBtn.textContent = 'COPY GAME LINK';
-    }, 1400);
-  } catch {
-    copyGameLinkBtn.textContent = 'COPY FAILED';
-  }
-});
 
 updateDesktopGate();
 window.addEventListener('resize', updateDesktopGate);

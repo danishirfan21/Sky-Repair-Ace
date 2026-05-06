@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap');
-html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Rajdhani',system-ui,sans-serif;user-select:none;cursor:none}
+html,body{margin:0;overflow:hidden;background:#05070d;color:#fff;font-family:'Rajdhani',system-ui,sans-serif;user-select:none}
+body.in-game { cursor: none; }
 
 /* === MINIMAL COMBAT HUD === */
 #hud{position:fixed;inset:0;pointer-events:none;z-index:5}

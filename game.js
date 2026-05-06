@@ -3320,7 +3320,7 @@ function endGame(){
   ui.overcharge?.classList.remove('active');
   ui.flow?.classList.remove('active');
   ui.finalStandCountdown?.classList.remove('active');
-  document.body.classList.remove('flow-state','final-stand-active');
+  document.body.classList.remove('flow-state','final-stand-active', 'in-game');
   clearEventCrest();
   clearCenterToast();
   clearRewardFeed();
@@ -3401,6 +3401,7 @@ function resetGame(){
   scorePopups.splice(0).forEach(p=>p.el.remove());
   ambientTracerTimer = 0;
   nextGunSide = -1;
+  document.body.classList.add('in-game');
   resetRunTransientState();
   Object.assign(aimAssistState,{target:null,timer:0,active:false,strength:0});
   Object.assign(playerDamageFx,{smokeTimer:0,sparkTimer:0,fireTimer:0});
@@ -3859,6 +3860,7 @@ function initStartScreen(){
     hasStarted=true;
     startOverlayDismissed=true;
     startScreen.classList.add('hidden');
+    document.body.classList.add('in-game');
     ensureAudio();
     audio.unlock();
     audio.play('start_button', 0.8);
